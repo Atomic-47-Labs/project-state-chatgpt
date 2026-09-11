@@ -1,0 +1,40 @@
+{
+  "name": "project-state",
+  "version": "4.9.0",
+  "description": "A local-first operational substrate for multi-stakeholder projects, with 42 skills for milestones, reporting, compliance, grants, SR&ED, tenders, and project documentation.",
+  "author": {
+    "name": "Atomic 47 Labs",
+    "url": "https://atomic47.co"
+  },
+  "homepage": "https://github.com/Atomic-47-Labs/project-state-plugin-public",
+  "repository": "https://github.com/Atomic-47-Labs/project-state-plugin-public",
+  "license": "MIT",
+  "keywords": [
+    "project-management",
+    "milestones",
+    "reporting",
+    "compliance",
+    "grant-management",
+    "sred",
+    "tenders",
+    "project-state"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Project State",
+    "shortDescription": "Project operations, reporting, and compliance skills.",
+    "longDescription": "Manage project state, milestones, objectives, phase gates, documents, reports, grants, Canadian SR&ED records, tender intelligence, and compliance packs from a shared local-first substrate.",
+    "developerName": "Atomic 47 Labs",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://atomic47.co",
+    "defaultPrompt": [
+      "Scaffold a new project-state facility.",
+      "Show me the current project state and risks.",
+      "Generate a weekly project status report."
+    ]
+  }
+}

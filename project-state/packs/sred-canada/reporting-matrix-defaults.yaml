@@ -1,0 +1,138 @@
+# SR&ED Canada — Reporting Matrix Defaults (v1.0.0 — schema-conformant rewrite)
+# Seeded into project-state/reporting-matrix.yaml at capability enable.
+# Every entry either fires from an event hook or compiles through project-automator
+# into automation/tasks.yaml. CRA is NOT a project stakeholder — all entries are
+# internal preparation; the terminal artifact is always a draft.
+version: "2.0"
+pack: "sred-canada"
+
+stakeholders:
+  - id: "tax.cra"
+    label: "Canada Revenue Agency (SR&ED)"
+    type: "regulator"
+    note: "Not a project stakeholder — exists to satisfy matrix validation only. Never contacted by the system."
+  - id: "internal.sred-lead"
+    label: "SR&ED Lead (internal)"
+    type: "internal"
+  - id: "external.sred-advisor"
+    label: "SR&ED Consultant / Tax Advisor"
+    type: "external"
+    note: "Add contact when engaged. All delivery to this stakeholder is gmail.draft."
+
+defaults:
+  # ── Continuous capture (event-fired) ─────────────────────────────
+  - id: "sred.evidence-capture"
+    stakeholder_group: "internal.sred-lead"
+    report: "sred-evidence-check"
+    cadence: { kind: ad-hoc, on_event: "milestone.completed" }
+    format: md
+    surface: substrate
+    generator: project-sred-tracker          # runs milestone_sred_check
+    profile: "sred-canada.funder-reporting"
+    description: "On milestone completion: did this involve experimental development, and are TU/EX records current?"
+
+  - id: "sred.harvest-confirmations"
+    stakeholder_group: "internal.sred-lead"
+    report: "sred-evidence-proposals"
+    cadence: { kind: ad-hoc, on_event: "sred.evidence.proposed" }
+    format: md
+    surface: substrate
+    generator: project-sred-tracker
+    description: "Surface sred/inbox/ candidates for confirmation. Nothing reaches the evidence log unconfirmed."
+
+  # ── Weekly progress digest (time-fired) ──────────────────────────
+  - id: "sred.weekly-progress"
+    stakeholder_group: "internal.sred-lead"
+    report: "sred-weekly-digest"
+    cadence: { kind: weekly, day: monday }
+    format: md
+    surface: substrate
+    generator: project-sred-tracker          # weekly_digest op
+    profile: "sred-canada.innovation-criteria"
+    description: |
+      Capture-discipline instrument, not a mini-claim: captured this week (new
+      TU/EX/ADV, evidence by experiment) · uncaptured-but-candidate (work in
+      declared uncertainty areas with no TU/EX, via the criteria lens) · staleness
+      (active EX with no evidence in 14+ days) · unconfirmed sred/inbox/ count ·
+      deadline countdown line. Route to Slack via project-notifier if desired.
+
+  # ── Quarterly review (time-fired) ────────────────────────────────
+  - id: "sred.quarterly-log-review"
+    stakeholder_group: "internal.sred-lead"
+    report: "sred-log-review"
+    cadence: { kind: quarterly, alignment: "first-month-of-quarter", lead_time_days: 0 }
+    format: md
+    surface: substrate
+    generator: project-sred-tracker          # quarterly_review op
+    profile: "sred-canada.funder-reporting"
+    description: "Gap analysis + completeness + deadline countdowns + unconfirmed candidates + cost-allocation staleness."
+
+  # ── Annual claim chain (deadline-anchored, chained) ──────────────
+  - id: "sred.annual-cost-categorization"
+    stakeholder_group: "internal.sred-lead"
+    report: "sred-cost-categorization"
+    cadence:
+      kind: deadline
+      anchor: "capabilities.sred.fiscal_year_end"
+      recur: annual
+      offset_months: 0                       # due at FY end
+      lead_time_days: 60                     # start in FY Q4
+    format: yaml
+    surface: substrate
+    generator: project-sred-tracker          # rollup_costs + worksheet reconciliation
+    profile: "sred-canada.funder-reporting"
+
+  - id: "sred.t661-narrative-draft"
+    stakeholder_group: "internal.sred-lead"
+    report: "t661-narrative"
+    after: "sred.annual-cost-categorization"
+    cadence:
+      kind: deadline
+      anchor: "capabilities.sred.fiscal_year_end"
+      recur: annual
+      offset_months: 15                      # target date; 3-month buffer before the hard deadline
+      hard_offset_months: 18                 # CRA hard deadline — missing it forfeits the claim
+      escalation_days: [180, 90, 30]
+      lead_time_days: 45
+    format: md
+    surface: substrate
+    generator: project-funder-reporting
+    profile: "sred-canada.funder-reporting"
+
+  - id: "sred.t661-review"
+    stakeholder_group: "internal.sred-lead"
+    report: "sred-submission-review"
+    after: "sred.t661-narrative-draft"
+    cadence:
+      kind: deadline
+      anchor: "capabilities.sred.fiscal_year_end"
+      recur: annual
+      offset_months: 15
+      hard_offset_months: 18
+      escalation_days: [90, 30]
+      lead_time_days: 30
+    format: md
+    surface: substrate
+    generator: project-sred-reviewer
+    description: "Audit-risk review: CRA-reviewer simulation, traceability, cost framing, verdict. A weak verdict blocks the chain."
+
+  - id: "sred.advisor-handoff"
+    stakeholder_group: "external.sred-advisor"
+    report: "sred-advisor-package"
+    after: "sred.t661-review"
+    review_gate:
+      skill: project-sred-reviewer
+      pass_on: ["strong", "borderline-accepted-by-user"]
+    cadence:
+      kind: deadline
+      anchor: "capabilities.sred.fiscal_year_end"
+      recur: annual
+      offset_months: 16                      # ≥60 days inside the hard deadline
+      hard_offset_months: 18
+      escalation_days: [60, 30]
+      lead_time_days: 14
+    format: docx
+    surface: gmail.draft                     # ALWAYS a draft — a human sends; a human files
+    generator: project-funder-reporting
+    profile: "sred-canada.funder-reporting"
+    description: "Bundle: T661 narrative + evidence map + cost categorization + project summary."

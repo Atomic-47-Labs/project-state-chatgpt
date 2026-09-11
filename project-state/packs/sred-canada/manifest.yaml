@@ -1,0 +1,45 @@
+pack:
+  id: "sred-canada"
+  name: "SR&ED Canada — Scientific Research & Experimental Development"
+  version: "1.0.0"
+  compatible_core: ">=4.1"
+  description: |
+    Default behavior pack for the `sred` capability plugin: Canadian projects claiming
+    the SR&ED tax incentive (CRA T661/T2SCH1). Configures the annual CRA claim chain
+    (cost categorization → T661 narrative → audit-risk review → advisor handoff, all
+    fiscal-year-anchored with the 18-month hard deadline), CRA-preferred language
+    guidance, SR&ED readiness gate injections, publication coordination, and the
+    archive tail (claims legitimately outlive project closeout).
+
+    Behavior only. Entities, skills, templates, and the validator ship with the `sred`
+    capability plugin (capabilities/sred/) — this pack contains no substrate extensions
+    and no skills, per CAPABILITY-PLUGINS.md §6.
+
+    Coexists with any active project pack (pic-pcais, client-services, agile-default,
+    board-investor): resolution is per-matrix-entry via the `profile:` field.
+  authors:
+    - "David Olsson <david@atomic47.co>"
+  governing_documents:
+    - "CRA T661 SR&ED Expenditures Claim"
+    - "CRA T2SCH1 Net Income (Loss) for Income Tax Purposes"
+    - "CRA SR&ED Filing Requirements Policy"
+    - "Income Tax Act s.37 (SR&ED expenditures)"
+  released: "2026-08-17"
+  maturity: "beta"
+
+provides:
+  profiles:
+    - funder-reporting      # the annual T661 claim chain + language guidance
+    - phase-gate            # SR&ED readiness gate injections
+    - external-comms        # publication ↔ claim coordination
+    - archive               # closeout package-or-waive rule + archive tail
+    - innovation-criteria   # Layer 1 company capture lens (fork the pack per company)
+  templates: []          # templates live in the capability plugin (capabilities/sred/templates/)
+  reporting_matrix_defaults: true
+
+depends_on:
+  packs: []
+  capability: "sred"     # this pack configures the sred capability's machinery
+
+conflicts_with:
+  packs: []
