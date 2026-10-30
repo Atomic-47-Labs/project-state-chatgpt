@@ -25,7 +25,7 @@ outputs:
         label: "Project Summary"
         source: "manifest.yaml + sred/state.json"
         fields:
-          - project_code               # e.g., AIMQC-CORE-2025
+          - project_code               # e.g., ACME-CORE-2025
           - project_title              # short title for T661
           - field_of_science           # CRA code (e.g., 2.02.09 Software engineering)
           - start_date

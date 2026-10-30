@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "project-state": {
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/server/state-mcp-local.mjs"
+      ],
+      "env": {
+        "PROJECT_STATE_NO_OS_ACTOR": "1"
+      },
+      "env_vars": [
+        "PROJECT_STATE_ACTOR",
+        "PROJECT_STATE_DIR",
+        "PROJECT_STATE_REGISTRY",
+        "PS_WORKSPACE_ROOT"
+      ]
+    }
+  }
+}

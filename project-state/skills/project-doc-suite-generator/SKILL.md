@@ -1,9 +1,17 @@
 ---
 name: project-doc-suite-generator
-description: "⚠️ DEPRECATED in v3.0 — use project-doc-suite instead. project-doc-suite generates the same governance Office files plus a full software documentation suite, all from a unified context that reads both project-state/ and the live codebase. This skill will be removed in v3.1. If you are on v2.x and cannot upgrade, this skill still functions: generates index, tracker xlsx, project plan, risk register, milestone specs, architecture overview, and roadmap/KPIs from project-state/ only."
+description: "DEPRECATED — use project-doc-suite. Legacy governance Office-file generator kept for existing matrix entries."
+metadata:
+  map: {deprecated: true, superseded_by: project-doc-suite}
 ---
 
 # Project Doc Suite Generator
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> ⚠️ DEPRECATED in v3.0 — use project-doc-suite instead. project-doc-suite generates the same governance Office files plus a full software documentation suite, all from a unified context that reads both project-state/ and the live codebase. This skill will be removed in v3.1. If you are on v2.x and cannot upgrade, this skill still functions: generates index, tracker xlsx, project plan, risk register, milestone specs, architecture overview, and roadmap/KPIs from project-state/ only.
 
 > ⚠️ **Deprecated in v3.0.** Use `project-doc-suite` instead.
 >
@@ -17,7 +25,7 @@ description: "⚠️ DEPRECATED in v3.0 — use project-doc-suite instead. proje
 
 ## Purpose
 
-Produce a complete baseline report bundle — styled `.docx` and `.xlsx` files — from the structured state in `project-state/`. This is the rendering engine that turns YAML/JSON substrate data into professional Office documents matching the quality standard set by production projects (e.g., ai26.10).
+Produce a complete baseline report bundle — styled `.docx` and `.xlsx` files — from the structured state in `project-state/`. This is the rendering engine that turns YAML/JSON substrate data into professional Office documents matching the quality standard set by production projects (e.g., my-project).
 
 **Design principle:** reports are views of state. The generator reads `project-state/`, renders styled documents, and writes them to `reports/baseline/`. If a report is wrong, the state was wrong — fix the state, regenerate.
 

@@ -26,6 +26,7 @@ pack:
     - "Income Tax Act s.37 (SR&ED expenditures)"
   released: "2026-08-17"
   maturity: "beta"
+  axis: capability   # bundled by a capability; never listed in a project pack picker (PROJECT-TYPES-SPEC section 3)
 
 provides:
   profiles:
@@ -33,7 +34,7 @@ provides:
     - phase-gate            # SR&ED readiness gate injections
     - external-comms        # publication ↔ claim coordination
     - archive               # closeout package-or-waive rule + archive tail
-    - innovation-criteria   # Layer 1 company capture lens (fork the pack per company)
+    - innovation-criteria   # Layer 1 company capture lens — ships blank; filled per claimant into sred/company-criteria.yaml
   templates: []          # templates live in the capability plugin (capabilities/sred/templates/)
   reporting_matrix_defaults: true
 

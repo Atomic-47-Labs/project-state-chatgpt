@@ -1,7 +1,5 @@
 <title><!--SRED_TITLE--></title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<!-- No external resources: the app renders this page under a CSP that allows only self + inline; the font stacks below fall back to system faces. -->
 
 <style>
 /* ── tokens ─────────────────────────────────────────────────────────────── */
@@ -245,6 +243,9 @@ tfoot td{background:var(--surface-2); font-weight:600; border-top:1px solid var(
 .callout p{margin:0 0 8px; font-family:var(--serif); font-size:14px; color:var(--ink-2); max-width:80ch; white-space:pre-line}
 .callout p:last-child{margin-bottom:0}
 .callout.warn{border-left-color:var(--warn)}
+.callout ul{margin:0 0 8px; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:5px}
+.callout li{font-size:13.5px; color:var(--ink-2)}
+.callout li .mono{color:var(--ink); font-size:12px}
 
 /* ── evidence log ───────────────────────────────────────────────────────── */
 .log{border-left:1px solid var(--rule-2); margin-left:8px; padding-left:0}
@@ -305,6 +306,9 @@ tfoot td{background:var(--surface-2); font-weight:600; border-top:1px solid var(
 .rn{border-left:2px solid var(--accent-2); padding:2px 0 2px 11px; font-family:var(--serif); font-size:13.5px; color:var(--ink-2)}
 .rn.resolved{border-left-color:var(--ok)}
 .rn.high{border-left-color:var(--crit)}
+.rn.medium{border-left-color:var(--warn)}
+.rn .rnm{display:block; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-3); margin-bottom:3px}
+.rn .rnr{display:block; margin-top:4px; color:var(--ink-3)}
 
 /* ── footer ─────────────────────────────────────────────────────────────── */
 footer{margin-top:46px; border-top:1px solid var(--rule-2); background:var(--surface)}
@@ -509,7 +513,10 @@ footer .disclaim{color:var(--ink-3); font-size:12.5px}
     { k: 'Section G · advancements', v: D.entities.adv.length, s: D.entities.adv.length === 0 ? 'nothing claimed yet' : 'recorded', tone: D.entities.adv.length === 0 ? 'crit' : 'ok' },
     { k: 'Evidence entries', v: D.totals.evidenceEntries, s: D.totals.backfilled + ' back-filled, disclosed' },
     { k: 'Recorded effort', v: D.totals.recordedDays.toFixed(1), unit: 'days', s: D.effort ? 'floor estimate, not timesheets' : 'from entity records', tone: 'warn' },
-    { k: 'Open findings', v: D.findings.length, s: high + ' high · ' + med + ' medium', tone: high ? 'crit' : med ? 'warn' : 'ok' }
+    // An empty facility trips no check: say so, never show it as all-clear.
+    D.reviewable
+      ? { k: 'Open findings', v: D.findings.length, s: high + ' high · ' + med + ' medium', tone: high ? 'crit' : med ? 'warn' : 'ok' }
+      : { k: 'Open findings', v: '—', s: 'nothing recorded yet — not reviewable', tone: high ? 'crit' : 'warn' }
   ];
   var tl = $('tile-list');
   tiles.forEach(function (t) {
@@ -648,13 +655,15 @@ footer .disclaim{color:var(--ink-3); font-size:12.5px}
 
   // ── findings ────────────────────────────────────────────────────────────
   var fl = $('finding-list');
-  if (!D.findings.length) {
+  if (!D.reviewable) {
+    fl.appendChild(el('div', 'void crit', 'Nothing to review yet. No uncertainty or experiment is recorded, so the tracker checks have nothing to run against — an empty facility is not an all-clear.'));
+  } else if (!D.findings.length) {
     fl.appendChild(el('div', 'find', 'No gaps found against the tracker checks.'));
   }
   // One card per check, however many records tripped it — the check is the finding,
   // the records are its instances.
   var groups = [], gmap = {};
-  D.findings.forEach(function (f) {
+  D.findings.filter(function (f) { return f.code !== 'nothing-recorded'; }).forEach(function (f) {   // said above, once
     var key = f.severity + '/' + f.code;
     if (!gmap[key]) { gmap[key] = { severity: f.severity, code: f.code, title: f.title, action: f.action, items: [] }; groups.push(gmap[key]); }
     gmap[key].items.push(f);
@@ -787,9 +796,30 @@ footer .disclaim{color:var(--ink-3); font-size:12.5px}
   } else {
     D.inbox.forEach(function (c) {
       var n = el('div', 'callout');
-      var h = el('h4', '', c.date + ' · ' + (c.source || 'inbox') + ' · proposed by ' + (c.proposedBy || 'harvester'));
-      n.appendChild(h);
-      n.appendChild(el('p', '', c.description));
+      var cluster = c.kind === 'cluster';
+      // A cluster from the harvester's correlation pass is one thread of work and one confirm decision.
+      var head = cluster
+        ? [c.date || 'undated', 'cluster of ' + c.records.length + ' record' + (c.records.length === 1 ? '' : 's'),
+           (c.corroboration === null ? 'corroboration not counted' : c.corroboration + ' source' + (c.corroboration === 1 ? '' : 's') + ' corroborate')]
+        : [c.date, c.source || 'inbox'];
+      n.appendChild(el('h4', '', head.concat('proposed by ' + (c.proposedBy || 'harvester')).join(' · ')));
+      if (c.description) n.appendChild(el('p', '', c.description));
+      if (cluster) {
+        var meta = [];
+        if (c.suggested) meta.push('Suggested ' + c.suggested);
+        if (c.window) meta.push('Window ' + c.window);
+        if (meta.length) n.appendChild(el('p', '', meta.join('  ·  ')));
+        var ul = el('ul');
+        c.records.forEach(function (r) {
+          var li = el('li');
+          li.appendChild(el('span', 'mono', [r.date, r.source, r.ref].filter(Boolean).join('  ') + (r.tier ? '  tier ' + r.tier : '')));
+          if (r.description) li.appendChild(document.createTextNode(' — ' + r.description));
+          ul.appendChild(li);
+        });
+        n.appendChild(ul);
+      } else if (c.suggested) {
+        n.appendChild(el('p', '', 'Suggested ' + c.suggested + (c.ref ? '  ·  ' + c.ref : '')));
+      }
       var f = el('p', '');
       f.appendChild(el('span', 'mono', c.file));
       if (c.people.length) f.appendChild(document.createTextNode('  ·  ' + c.people.join(', ')));
@@ -982,7 +1012,12 @@ footer .disclaim{color:var(--ink-3); font-size:12.5px}
       box.style.flexDirection = 'column';
       box.style.gap = '9px';
       e.review_notes.forEach(function (n) {
-        box.appendChild(el('div', 'rn' + (/^RESOLVED/.test(n) ? ' resolved' : /HIGH:/.test(n) ? ' high' : ''), n));
+        var r = el('div', 'rn' + (n.resolved ? ' resolved' : n.severity === 'high' ? ' high' : n.severity === 'medium' ? ' medium' : ''));
+        var meta = [n.date, n.by, n.severity, n.resolved && !/^RESOLVED/.test(n.text) ? 'resolved' : null].filter(Boolean);
+        if (meta.length) r.appendChild(el('span', 'rnm', meta.join(' · ')));
+        r.appendChild(document.createTextNode(n.text));
+        if (n.resolution) r.appendChild(el('span', 'rnr', 'Resolution: ' + n.resolution));
+        box.appendChild(r);
       });
       section(b, 'Review notes', box);
     }

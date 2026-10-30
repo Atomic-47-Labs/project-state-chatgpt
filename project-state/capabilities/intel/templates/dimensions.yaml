@@ -1,0 +1,69 @@
+# The comparison matrix's default dimensions (docs/INTEL-COMPARE-AND-MAP-SPEC.md §1.2).
+# Used when the manifest declares no capabilities.intel.competitive.dimensions; a project that declares
+# its own replaces this list entirely (copy the ones it wants). Generic on purpose: nothing here is about
+# any one vendor. A dimension with no `scale` is descriptive only: never scored, never weighted.
+# Scales read from the BUYER's side: 5 is what a buyer would want, 1 what they would not.
+dimensions:
+  - id: who-for
+    label: Who it is for
+    question: Which buyers and teams does the vendor say the product is for?
+    categories: [market, positioning]
+
+  - id: what-it-captures
+    label: What it captures
+    question: What does the product gather into its record — which sources and kinds of work?
+    categories: [product]
+    scale:
+      1: One narrow source
+      3: Several sources, each set up by hand
+      5: The team's main sources, gathered as the work happens
+
+  - id: what-it-produces
+    label: What it produces
+    question: What does the product produce from its record without someone writing it?
+    categories: [feature, product]
+    scale:
+      1: Answers on request only
+      3: Some generated summaries or updates
+      5: Regular reports for the people who need them, generated from the record
+
+  - id: where-used
+    label: Where people use it
+    question: Where can people work with it — its own app, chat assistants, other tools, an API?
+    categories: [integration]
+    scale:
+      1: Its own app only
+      3: Its own app plus one or two other surfaces
+      5: Inside the tools people already use, including assistants, with an open API
+
+  - id: entry-price
+    label: Entry price
+    question: What does it cost to start, and is the price published?
+    categories: [pricing, packaging]
+    scale:
+      1: No published price; sales-led only
+      3: Published paid plans
+      5: A free or low-cost way to start, with published prices beyond it
+
+  - id: data-location
+    label: Where data is stored
+    question: Where does the vendor store and process customer data, and can the buyer choose?
+    categories: [compliance, security]
+    scale:
+      1: One region, outside the buyer's jurisdiction, no choice
+      3: A choice of regions, not necessarily the buyer's own
+      5: Stored in the buyer's jurisdiction by default
+
+  - id: attestations
+    label: Security attestations
+    question: Which independent security attestations does the vendor hold?
+    categories: [security, compliance]
+    scale:
+      1: None stated
+      3: In progress, or self-assessed
+      5: A current independent attestation (for example SOC 2 Type II or ISO 27001)
+
+  - id: customers
+    label: Named customers
+    question: Which customers does the vendor name?
+    categories: [customer]

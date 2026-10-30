@@ -44,6 +44,7 @@ files:
         corroborated_by: "optional [{record_type, reference}] — records from OTHER sources evidencing the same work"
         backfilled: "REQUIRED true when logged_at - date > 7 days"
         source: "for entry_type: harvested — {surface, ref} provenance"
+        corrects: "optional — the timestamp of an earlier entry this one corrects (entries are never edited)"
         logged_by: "name"
         logged_at: "ISO8601"
   - path: "state/sred.json"
@@ -58,11 +59,31 @@ files:
       baseline (schema/eligibility-baseline.yaml). A capture lens, never an
       eligibility argument — the standard-practice test is field-level.
     template: "templates/criteria.yaml"
+  - path: "sred/company-criteria.yaml"
+    kind: project-config
+    purpose: |
+      Layer 1 company innovation criteria — the claimant's technology baseline, fields of
+      science, exemplars and house language. Written by sred-onboarding Chapter 4 from the
+      pack profile innovation-criteria.yaml, which ships blank. Read before a forked pack's
+      filled profile and before the blank template; a file still holding "<...>"
+      placeholders declares no company lens.
+    template: "packs/sred-canada/profiles/innovation-criteria.yaml"
 
 # Entity field schemas are defined in skills/project-sred-tracker/SKILL.md (adopted v1.0)
 # with these capability-level additions to all three entity kinds:
 entity_field_additions:
-  all: [review_notes, claim_fy]
+  all: [review_notes, claim_fy, revisions]   # revisions: written by update_record — {at, by, fields, reason, prior}
+
+# review_notes[] items (docs/SRED-CAPABILITY-SPEC.md §4.2). Either a plain string
+# (v0.1.0 form: leading "RESOLVED" = resolved, "HIGH:"/"MEDIUM:"/"LOW:" = severity)
+# or this object, which project-sred-reviewer writes. Append; never rewrite a note.
+review_note:
+  date: "YYYY-MM-DD — when the finding was made"
+  by: "skill or person (project-sred-reviewer, an advisor's email)"
+  severity: "high | medium | low — audit risk to the record, never eligibility"
+  finding: "the finding, in the reviewer's words"
+  status: "open | resolved"
+  resolution: "what settled it (set when status becomes resolved; otherwise null)"
 
 # Evidence source tiers — graded by audit durability, not convenience.
 # Tier 1 sources carry server-side, third-party timestamps and version history:
@@ -104,7 +125,7 @@ evidence_correlation:
     - "ci_build → commit sha → PR → issue"
     - "Confluence page links to/from Jira epics; page refs in issue descriptions"
     - "sred-ex-NN / sred-tu-NN labels on any source (author-asserted anchor)"
-  cluster_stub: "sred/inbox/ proposal of shape {suggested_ex|suggested_tu, records: [{record_type, reference, tier, date, excerpt?}], window: {from, to}, corroboration: <distinct source count>}"
+  cluster_stub: "sred/inbox/ proposal of shape {suggested_ex|suggested_tu, records: [{record_type, reference, tier, date, excerpt?}], window: {from, to}, corroboration: <distinct source count>} — the dashboard draws it as one card listing its records"
   uses:
     - "date corroboration: TU identified_date / EX start_date checked against the cluster's earliest source timestamps"
     - "failed-trial corroboration: ci_build failures on experiment branches are machine-timestamped Section F evidence"

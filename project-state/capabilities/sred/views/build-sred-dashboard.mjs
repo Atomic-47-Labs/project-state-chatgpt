@@ -53,12 +53,22 @@ if (!fs.existsSync(path.join(FAC, 'sred'))) {
 
 // ── small helpers ──────────────────────────────────────────────────────────
 const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
-const readYaml = (p) => { const t = readText(p); return t === null ? null : parseYaml(t); };
+// A file the reader cannot parse is reported, never dropped quietly: a missing
+// record makes the gap checks read cleaner than the facility is (FB-036).
+const unreadable = [];
+const readYaml = (p) => {
+  const t = readText(p);
+  if (t === null) return null;
+  try { return parseYaml(t); } catch (err) {
+    unreadable.push({ file: path.relative(FAC, p), error: err.message });
+    return null;
+  }
+};
 const listYaml = (dir) => {
-  try {
-    return fs.readdirSync(dir).filter((f) => /\.ya?ml$/.test(f) && !f.startsWith('.')).sort()
-      .map((f) => ({ file: f, data: readYaml(path.join(dir, f)) })).filter((x) => x.data);
-  } catch { return []; }
+  let files;
+  try { files = fs.readdirSync(dir); } catch { return []; }
+  return files.filter((f) => /\.ya?ml$/.test(f) && !f.startsWith('.')).sort()
+    .map((f) => ({ file: f, data: readYaml(path.join(dir, f)) })).filter((x) => x.data);
 };
 const s = (v) => (v === null || v === undefined ? '' : String(v)).trim();
 const arr = (v) => (Array.isArray(v) ? v : v === null || v === undefined || v === '' ? [] : [v]);
@@ -88,7 +98,7 @@ const reflow = (t) => String(t || '').split(/\n{2,}/).map((par) =>
 // ── load ───────────────────────────────────────────────────────────────────
 const SRED = path.join(FAC, 'sred');
 const manifestRaw = readText(path.join(FAC, 'manifest.yaml')) || '';
-const manifest = manifestRaw ? parseYaml(manifestRaw) : {};
+const manifest = (manifestRaw && readYaml(path.join(FAC, 'manifest.yaml'))) || {};
 const capSred = manifest?.capabilities?.sred || {};
 const stateSred = (() => { const t = readText(path.join(FAC, 'state', 'sred.json')); try { return t ? JSON.parse(t) : null; } catch { return null; } })();
 const criteria = readYaml(path.join(SRED, 'criteria.yaml'));
@@ -96,9 +106,7 @@ const criteria = readYaml(path.join(SRED, 'criteria.yaml'));
 const tus = listYaml(path.join(SRED, 'uncertainties')).map((x) => x.data);
 const exs = listYaml(path.join(SRED, 'experiments')).map((x) => x.data);
 const advs = listYaml(path.join(SRED, 'advancements')).map((x) => x.data);
-const inbox = listYaml(path.join(SRED, 'inbox')).map((x, i, a) => ({ ...x.data, _file: a[i]?.file }));
-const inboxFiles = listYaml(path.join(SRED, 'inbox'));
-inbox.forEach((r, i) => { r._file = inboxFiles[i].file; });
+const inbox = listYaml(path.join(SRED, 'inbox')).map((x) => ({ ...x.data, _file: x.file }));
 
 const costFiles = listYaml(path.join(SRED, 'cost-tracking'));
 const effortBasis = costFiles.map((x) => x.data).find((d) => d && (d.entity === 'cost_effort_basis' || d.figures)) || null;
@@ -232,6 +240,21 @@ if (exs.length > 0 && advs.length === 0) {
     'Either record advancements proportionate to the results already observed, or note deliberately that none is yet claimable.');
 }
 
+// The checks above run over records, so an empty facility trips none of them.
+// That is "nothing to review yet", not an all-clear (FB-039).
+if (tus.length === 0 && exs.length === 0) {
+  finding('medium', 'nothing-recorded', 'Nothing recorded yet — not reviewable', 'sred/',
+    'No uncertainty or experiment is recorded. The gap checks run over records, so an empty facility has nothing to fail them — this is not an all-clear.',
+    inbox.length
+      ? `Confirm the ${inbox.length} candidate${inbox.length === 1 ? '' : 's'} waiting in sred/inbox/, then record the uncertainty and experiment they evidence.`
+      : 'Record the first uncertainty and the experiment investigating it with project-sred-tracker.');
+}
+
+for (const u of unreadable) {
+  finding('high', 'yaml-unreadable', 'Record could not be read', u.file, u.error,
+    'Fix the YAML in this file. The dashboard leaves the record out until it parses, so every other check here is incomplete.');
+}
+
 // counter drift between state/sred.json and the files on disk
 const declared = stateSred?.counters || null;
 const actual = { tu: tus.length, ex: exs.length, adv: advs.length };
@@ -263,8 +286,10 @@ gate('Section G has a claim', advs.length > 0,
   advs.length ? `${advs.length} advancement${advs.length === 1 ? '' : 's'} recorded` : 'No advancement recorded — correct only while the core hypotheses stay untested');
 gate('Effort from prospective time records', !effortBasis,
   effortBasis ? `Current figures are reconstruction: ${s(effortBasis.title)}` : 'No reconstruction basis on file');
+const clusterCount = inbox.filter((r) => Array.isArray(r.records)).length;
 gate('Evidence candidates all confirmed', inbox.length === 0,
-  inbox.length ? `${inbox.length} unconfirmed candidate${inbox.length === 1 ? '' : 's'} in sred/inbox/` : 'sred/inbox/ is empty');
+  inbox.length ? `${inbox.length} unconfirmed candidate${inbox.length === 1 ? '' : 's'} in sred/inbox/` +
+    (clusterCount ? ` (${clusterCount} cluster${clusterCount === 1 ? '' : 's'} of correlated records)` : '') : 'sred/inbox/ is empty');
 
 // unresolved annotations the manifest itself carries on the claim identity
 const manifestFlags = [];
@@ -329,6 +354,43 @@ const chains = tus.map((tu) => {
   return { tu: tu.id, links, state };
 });
 
+// review_notes (docs/SRED-CAPABILITY-SPEC.md §4.2): a plain string, or
+// {date, by, finding, severity, status, resolution}. Either form renders; an
+// object with none of the known fields still shows its fields, never [object Object].
+const reviewNote = (n) => {
+  if (n === null || n === undefined) return null;
+  if (typeof n !== 'object' || Array.isArray(n)) {
+    const text = Array.isArray(n) ? n.map(s).join('; ') : s(n);
+    if (!text) return null;
+    const sev = (text.match(/\b(HIGH|MEDIUM|LOW):/) || [])[1];
+    return { text, date: null, by: null, severity: sev ? sev.toLowerCase() : null, resolved: /^RESOLVED/.test(text), resolution: null };
+  }
+  const known = ['finding', 'note', 'text', 'date', 'by', 'severity', 'status', 'resolved', 'resolution'];
+  const text = s(n.finding) || s(n.note) || s(n.text) ||
+    Object.entries(n).filter(([k]) => !known.includes(k)).map(([k, v]) => `${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : s(v)}`).join(' · ');
+  return {
+    text: reflow(text), date: s(n.date) || null, by: s(n.by) || null,
+    severity: s(n.severity).toLowerCase() || null,
+    resolved: n.resolved === true || /^resolved$/i.test(s(n.status)),
+    resolution: reflow(n.resolution) || null,
+  };
+};
+
+// A cluster stub from the harvester's correlation pass (skills/project-harvester,
+// schema evidence_correlation.cluster_stub): one proposal, several records.
+const inboxWindow = (w) => {
+  if (w === null || w === undefined) return null;
+  if (Array.isArray(w)) return w.map(s).filter(Boolean).join(' → ') || null;
+  if (typeof w === 'object') return [s(w.from ?? w.start), s(w.to ?? w.end)].filter(Boolean).join(' → ') || null;
+  return s(w) || null;
+};
+const inboxRecord = (r) => (r && typeof r === 'object' ? {
+  date: s(r.date), tier: r.tier ?? null,
+  source: s(r?.source?.surface) || s(r.surface) || s(r.record_type) || s(r.type),
+  ref: s(r?.source?.ref) || s(r.ref) || s(r.reference),
+  description: reflow(r.description_draft || r.description || r.title || r.excerpt),
+} : { date: '', tier: null, source: '', ref: s(r), description: '' });
+
 const entity = (e, kind) => ({
   kind, id: s(e.id), slug: s(e.slug), status: s(e.status) || null,
   claim_fy: s(e.claim_fy) || (s(e.fiscal_year) ? 'FY' + s(e.fiscal_year) : null),
@@ -360,7 +422,7 @@ const entity = (e, kind) => ({
     type: s(r?.type), reference: s(r?.reference), date: s(r?.date), description: s(r?.description),
   })),
   people: arr(e.people_involved).map((p) => ({ name: s(p?.name), role: s(p?.role), days: Number(p?.eligible_days) || 0 })),
-  review_notes: arr(e.review_notes).map(s).filter(Boolean),
+  review_notes: arr(e.review_notes).map(reviewNote).filter(Boolean),
   days: kind === 'ex' ? exDays(e) : null,
   lastEvidence: kind === 'ex' ? lastEvidenceDate(e.id) : null,
   evidenceGap: kind === 'ex' ? (lastEvidenceDate(e.id) ? sinceAsOf(lastEvidenceDate(e.id)) : null) : null,
@@ -388,6 +450,8 @@ const DATA = {
   },
   fiscalYears: fyEntries,
   counters: { declared, actual, drift },
+  reviewable: tus.length + exs.length > 0,
+  unreadable,
   entities: {
     tu: tus.map((e) => entity(e, 'tu')),
     ex: exs.map((e) => entity(e, 'ex')),
@@ -420,11 +484,19 @@ const DATA = {
     recordType: s(e.record_type), milestone: s(e.milestone_id) || null, people: arr(e.people).map(s),
     backfilled: e.backfilled === true || /BACK-?FILL/i.test(s(e.description)) || /back-?fill/i.test(s(e.logged_by)),
   })),
-  inbox: inbox.map((r) => ({
-    file: s(r._file), date: s(r.date), description: reflow(r.description_draft),
-    suggested: s(r.suggested_ex) || null, people: arr(r.people).map(s),
-    source: s(r?.source?.surface), ref: s(r?.source?.ref), proposedBy: s(r.proposed_by),
-  })),
+  inbox: inbox.map((r) => {
+    const records = Array.isArray(r.records) ? r.records.map(inboxRecord) : null;
+    const window = inboxWindow(r.window);
+    return {
+      file: s(r._file), kind: records ? 'cluster' : 'single',
+      date: s(r.date) || (window ? window.split(' → ')[0] : '') || (records ? records.map((x) => x.date).filter(Boolean).sort()[0] || '' : ''),
+      description: reflow(r.description_draft || r.description),
+      suggested: s(r.suggested_ex) || s(r.suggested_tu) || null, people: arr(r.people).map(s),
+      source: s(r?.source?.surface), ref: s(r?.source?.ref), proposedBy: s(r.proposed_by),
+      records, window,
+      corroboration: r.corroboration === undefined || r.corroboration === null ? null : Number(r.corroboration),
+    };
+  }),
   criteria: criteria ? {
     status: s(criteria.status), reviewedBy: s(criteria.reviewed_by) || null, lastRefreshed: s(criteria?.review?.last_refreshed) || null,
     areas: arr(criteria.candidate_uncertainty_areas).map((a) => ({
@@ -461,6 +533,7 @@ fs.writeFileSync(outPath, out);
 if (opt.json) { fs.mkdirSync(path.dirname(path.resolve(opt.json)), { recursive: true }); fs.writeFileSync(path.resolve(opt.json), JSON.stringify(DATA, null, 2)); }
 
 const sev = (k) => findings.filter((f) => f.severity === k).length;
+for (const u of unreadable) console.error(`warning: ${u.file} could not be read and is left out — ${u.error}`);
 console.log(`sred-dashboard → ${outPath}`);
 console.log(`  as of ${asOf} · ${tus.length} TU · ${exs.length} EX · ${advs.length} ADV · ${evidence.length} evidence entries`);
 console.log(`  findings: ${sev('high')} high · ${sev('medium')} medium · ${sev('low')} low · gates clear ${gates.filter((g) => g.clear).length}/${gates.length}`);

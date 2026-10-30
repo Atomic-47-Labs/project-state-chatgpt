@@ -22,12 +22,15 @@ namespace:
   skills:                  # suite-convention names mapped to this capability
     - project-sred-tracker
     - project-sred-reviewer
+    - sred-onboarding        # moved inside 2026-08-28 — was at repo-root skills/, reaching
+                             # the published plugin only via the wholesale mirror, undeclared
 
 payload:
   schema: "schema/"
   skills: "skills/"
   templates: "templates/"
-  validator: "validator/validate-sred.md"
+  validator: "validator/validate-sred.md"   # documents validator/scripts/check.py — the checks are executable (spec §7, #117)
+  scripts: "validator/scripts/"  # check.py; declared so check-published-payload.py fails a build that drops it
   views: "views/"          # V1.1 — specified, not yet mounted
   packs:
     bundled: [sred-canada] # default behavior pack; swappable per project

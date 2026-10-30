@@ -1,0 +1,391 @@
+[
+  {
+    "key": "console",
+    "file": "project-state.html",
+    "title": "Project State Console",
+    "description": "The project-state app in Claude, live from the Project State connector: every screen, the capability glances, and for editors of cloud projects the app's actions (move milestones, approve drafts, record KPIs, meetings, wiki) plus the org admin.",
+    "views": [
+      "today",
+      "dashboard",
+      "board",
+      "capabilities",
+      "calendar",
+      "goals",
+      "milestones",
+      "inputs",
+      "harvest",
+      "decisions",
+      "risks",
+      "changes",
+      "lessons",
+      "documents",
+      "team",
+      "feedback",
+      "matrix",
+      "outputs",
+      "tech",
+      "queue",
+      "gaps",
+      "processing",
+      "automation",
+      "costing",
+      "substrate",
+      "activity",
+      "scoreboard",
+      "wiki",
+      "admin",
+      "runs",
+      "cap-sred",
+      "cap-intel",
+      "cap-tender",
+      "cap-portfolio",
+      "cap-research"
+    ],
+    "tools": [
+      "project_list",
+      "view_today",
+      "get_entity",
+      "view_dashboard",
+      "view_board",
+      "milestone_update",
+      "view_capabilities",
+      "due_between",
+      "view_meetings",
+      "meeting_save",
+      "view_goals",
+      "kpi_reading",
+      "objective_status",
+      "view_intel",
+      "view_inputs",
+      "inbox_action",
+      "harvest_lane",
+      "harvest_context",
+      "whoami",
+      "view_risks",
+      "view_changes",
+      "view_documents",
+      "document_pin",
+      "view_team",
+      "person_note",
+      "view_feedback",
+      "view_matrix",
+      "view_outputs",
+      "view_tech_reports",
+      "view_queue",
+      "queue_action",
+      "view_gaps",
+      "view_jobs",
+      "view_automation",
+      "view_costs",
+      "view_substrate",
+      "view_activity",
+      "view_scoreboard",
+      "view_wiki",
+      "view_wiki_page",
+      "wiki_save",
+      "admin_overview",
+      "admin_member",
+      "admin_access",
+      "admin_audit",
+      "project_transfer",
+      "scheduler_admin",
+      "admin_token",
+      "view_capability",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306793
+  },
+  {
+    "key": "today",
+    "file": "ps-today.html",
+    "title": "Project State Today",
+    "description": "What is due this week, what is overdue, decisions waiting and drafts to review, live from the Project State connector.",
+    "views": [
+      "today"
+    ],
+    "tools": [
+      "project_list",
+      "view_today",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306304
+  },
+  {
+    "key": "overview",
+    "file": "ps-overview.html",
+    "title": "Project State Overview",
+    "description": "Phase, milestone progress, open risks and the milestone timeline, live from the Project State connector.",
+    "views": [
+      "dashboard"
+    ],
+    "tools": [
+      "project_list",
+      "view_dashboard",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306300
+  },
+  {
+    "key": "milestones",
+    "file": "ps-milestones.html",
+    "title": "Project State Milestones",
+    "description": "Milestones on a board from planned to complete, late ones flagged, live from the Project State connector.",
+    "views": [
+      "board"
+    ],
+    "tools": [
+      "project_list",
+      "view_board",
+      "get_entity",
+      "milestone_update",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306301
+  },
+  {
+    "key": "calendar",
+    "file": "ps-calendar.html",
+    "title": "Project State Calendar",
+    "description": "Milestone ends, report deliverables, decision and steering-committee dates by month, live from the Project State connector.",
+    "views": [
+      "calendar"
+    ],
+    "tools": [
+      "project_list",
+      "due_between",
+      "get_entity",
+      "view_meetings",
+      "meeting_save",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306318
+  },
+  {
+    "key": "risks",
+    "file": "ps-risks.html",
+    "title": "Project State Risks",
+    "description": "Open risks on a likelihood-by-impact grid with the app's risk intelligence, live from the Project State connector.",
+    "views": [
+      "risks"
+    ],
+    "tools": [
+      "project_list",
+      "view_risks",
+      "view_intel",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306300
+  },
+  {
+    "key": "goals",
+    "file": "ps-goals.html",
+    "title": "Project State Goals",
+    "description": "Objectives with their KPIs, attainment and trend lines, live from the Project State connector.",
+    "views": [
+      "goals"
+    ],
+    "tools": [
+      "project_list",
+      "view_goals",
+      "get_entity",
+      "kpi_reading",
+      "objective_status",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306280
+  },
+  {
+    "key": "reporting",
+    "file": "ps-reporting.html",
+    "title": "Project State Reporting",
+    "description": "Who gets which report, when, in what format and where, with the next due date for each, live from the Project State connector.",
+    "views": [
+      "matrix"
+    ],
+    "tools": [
+      "project_list",
+      "view_matrix"
+    ],
+    "bytes": 306321
+  },
+  {
+    "key": "sred",
+    "file": "ps-sred.html",
+    "title": "Project State SR&ED",
+    "description": "SR&ED capture status: the filing window, the E→F→G chain, findings, the advisor handoff gates and the evidence log, live from the Project State connector.",
+    "views": [
+      "cap-sred"
+    ],
+    "tools": [
+      "project_list",
+      "view_capability",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306347
+  },
+  {
+    "key": "research",
+    "file": "ps-research.html",
+    "title": "Project State Research",
+    "description": "The research desk: questions and how far along each is, evidence health against each mandate's gate, every mandate's life on an interactive timeline, and the graded findings register, live from the Project State connector.",
+    "views": [
+      "cap-research"
+    ],
+    "tools": [
+      "project_list",
+      "view_capability",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306421
+  },
+  {
+    "key": "intel",
+    "file": "ps-intel.html",
+    "title": "Project State Intel",
+    "description": "The intel desk and the competitive picture: entities, signals, the research agenda, claim freshness, conflicts and battlecards, live from the Project State connector.",
+    "views": [
+      "cap-intel"
+    ],
+    "tools": [
+      "project_list",
+      "view_capability",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306356
+  },
+  {
+    "key": "queue",
+    "file": "ps-queue.html",
+    "title": "Project State Queue",
+    "description": "Everything leaving the project, waiting on sign-off, approved, sent or dismissed, live from the Project State connector.",
+    "views": [
+      "queue"
+    ],
+    "tools": [
+      "project_list",
+      "view_queue",
+      "get_entity",
+      "queue_action",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306306
+  },
+  {
+    "key": "gaps",
+    "file": "ps-gaps.html",
+    "title": "Project State Gaps",
+    "description": "The eight silent killers nobody can see, scored by the app's own logic, live from the Project State connector.",
+    "views": [
+      "gaps"
+    ],
+    "tools": [
+      "project_list",
+      "view_gaps",
+      "get_entity",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306293
+  },
+  {
+    "key": "scoreboard",
+    "file": "ps-scoreboard.html",
+    "title": "Project State Scoreboard",
+    "description": "Whether the project keeps its five promises, measured from its own log, outbox and entities, live from the Project State connector.",
+    "views": [
+      "scoreboard"
+    ],
+    "tools": [
+      "project_list",
+      "view_scoreboard"
+    ],
+    "bytes": 306332
+  },
+  {
+    "key": "admin",
+    "file": "ps-admin.html",
+    "title": "Project State Admin",
+    "description": "Org admin in Claude: add people by email, set their role, give them viewer or editor access to projects, and read the audit log, through the Project State connector.",
+    "views": [
+      "admin"
+    ],
+    "tools": [
+      "project_list",
+      "whoami",
+      "admin_overview",
+      "admin_member",
+      "admin_access",
+      "admin_audit",
+      "project_transfer"
+    ],
+    "bytes": 306351
+  },
+  {
+    "key": "runs",
+    "file": "ps-runs.html",
+    "title": "Project State Runs",
+    "description": "The cloud scheduler for an org's admins: what ran for each cloud project, what is queued, and the controls to run now, stop, pause and resume jobs and choose which phases the org runs, through the Project State connector.",
+    "views": [
+      "runs"
+    ],
+    "tools": [
+      "project_list",
+      "admin_overview",
+      "scheduler_admin",
+      "admin_token",
+      "whoami"
+    ],
+    "bytes": 306404
+  },
+  {
+    "key": "harvest",
+    "file": "ps-harvest.html",
+    "title": "Project State Harvest",
+    "description": "Set up your harvest: choose which cloud projects your own mail, calendar and Slack feed, build the claude.ai routine that reads them with your connectors, and see when each project last heard from it. The cloud reads nobody's mail.",
+    "views": [
+      "harvest"
+    ],
+    "tools": [
+      "project_list",
+      "harvest_lane",
+      "harvest_context",
+      "whoami"
+    ],
+    "bytes": 306423
+  },
+  {
+    "key": "inputs",
+    "file": "ps-inputs.html",
+    "title": "Project State Inputs",
+    "description": "Sources and the inbox: what is waiting, accepted into working documents or deleted, live from the Project State connector.",
+    "views": [
+      "inputs"
+    ],
+    "tools": [
+      "project_list",
+      "view_inputs",
+      "get_entity",
+      "inbox_action",
+      "history",
+      "entity_put"
+    ],
+    "bytes": 306311
+  }
+]
