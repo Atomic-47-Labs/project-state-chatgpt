@@ -1,9 +1,23 @@
 ---
 name: project-harvester
-description: "Harvest external signals (Slack, Gmail, GDocs, scsiwyg, Jira, Confluence, Linear, GitHub) relevant to a specific project and write them as classified intel docs into `project-state/documents/inbox/`. Jira, Confluence, and Linear are pulled through their Claude MCP connectors (Atlassian + Linear); GitHub via its MCP connector or the gh CLI (commits digested per repo/day, plus PRs, releases, issues). Reads the project manifest to discover which channels, contacts, keywords, projects/boards, spaces, and surfaces to watch. Tracks per-user, per-surface cursors in `project-state/harvest/cursors/`. Persists through the substrate binding: local file writes by default, or the project-state.app deposit API when a cloud endpoint + personal token are configured (see HARVEST-CONNECTIVITY-ROADMAP.md). Designed to be called by `project-orchestrator` as part of the daily routine. Trigger: `/project-harvester` or invoked by project-orchestrator."
+description: "Harvest project signals from Slack, Gmail, Google Docs, Jira, Confluence, Linear, GitHub or a local clone into the project inbox — 'harvest', 'pull in what happened', 'check Slack and email for the project', 'harvest my email for project now'."
+metadata:
+  map:
+    tier: P3
+    stage: ingest
+    requires: [memory, python, shell, git, connector:slack, connector:gmail, connector:gdocs, connector:scsiwyg, connector:jira, connector:confluence, connector:linear, connector:github]
+    inputs: [slack, gmail, gdocs, scsiwyg, jira, confluence, linear, github, git]
+    reads: [manifest, state]
+    writes: [documents, state, log]
 ---
 
 # project-harvester
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> Harvest external signals (Slack, Gmail, GDocs, scsiwyg, Jira, Confluence, Linear, GitHub) relevant to a specific project and write them as classified intel docs into `project-state/documents/inbox/`. Jira, Confluence, and Linear are pulled through their Claude MCP connectors (Atlassian + Linear); GitHub via its MCP connector or the gh CLI (commits digested per repo/day, plus PRs, releases, issues); a git repository cloned on the user's machine via plain read-only `git` (`surfaces.github.local_repos`: commits digested per repo/day, tags in place of releases). Reads the project manifest to discover which channels, contacts, keywords, projects/boards, spaces, and surfaces to watch. Tracks per-user, per-surface cursors in `project-state/harvest/cursors/`. Persists through the substrate binding: local file writes by default, or the project-state.app deposit API when a cloud endpoint + personal token are configured (see HARVEST-CONNECTIVITY-ROADMAP.md). Designed to be called by `project-orchestrator` as part of the daily routine. Trigger: `/project-harvester` or invoked by project-orchestrator.
 
 Pull external intelligence relevant to a project and deposit it into `project-state/documents/inbox/` for the `project-document-curator` to classify, link to milestones/decisions, and promote.
 
@@ -52,6 +66,10 @@ Relevance is determined from the project manifest — no hardcoded rules. Every 
 - Issues matching `surfaces.linear.query` (free-text/filter) if set.
 - Issues mentioning a project keyword, or assigned to / commented on by a contact-roster member (matched by email where Linear exposes it).
 
+### GitHub *(via the GitHub MCP connector or the `gh` CLI)* and local clones *(via plain `git`)*
+- Hosted repos in `surfaces.github.repos[]`: commits (digested per repo/day), PRs, releases and issues since the cursor (Step 5e).
+- Clones on this machine in `surfaces.github.local_repos[]`: commits (digested per repo/day) and tags since the cursor, read-only (Step 5f). For a pilot that keeps its code in a clone with no GitHub access on this machine.
+
 ---
 
 ## Manifest keys consumed
@@ -98,17 +116,23 @@ surfaces:
     events: [commits, pulls, releases, issues]  # which activity to pull (subset ok)
     branch: ~                           # limit commits to a branch (null = default branch)
     query: ~                            # optional GitHub search qualifier (overrides repo scan)
+    local_repos: []                     # clones on THIS machine, read with plain git (Step 5f), e.g.
+                                        #   - {path: "~/code/widget-api", name: widget-api, branch: ~}
+                                        # path: the clone's root (~ ok); name: used in source ids and
+                                        # SR&ED refs (default: the folder name); branch: null = the
+                                        # branch HEAD is on. `events` applies: commits, and releases
+                                        # as tags; pulls and issues are skipped (a clone has none).
 
 # Consortium contacts are the other key input:
 consortium:
   members:
     - contacts:
-        - email: "r.rohozinski@secdev.com"
-          name: "Rafal Rohozinski"
+        - email: "member@partner.example"
+          name: "Pat Member"
   lead_applicant:
     contact:
-      email: "ishtiaque.ahmed@utoronto.ca"
-      name: "Syed Ishtiaque Ahmed"
+      email: "lead@university.example"
+      name: "Lee Applicant"
 ```
 
 ---
@@ -120,9 +144,30 @@ The skill persists through five verbs — `read-context`, `seen?`/`mark-seen`, `
 - **File binding (default).** Root = `$PROJECT_STATE_DIR`, else `./project-state`. All verbs are the file operations described in this document. This is what a local-only user AND the appliance's own headless runner use. **No cloud config → this binding, byte-identical behavior — never ask about cloud setup.**
 - **Deposit binding.** Active only when `$PS_ENDPOINT` and a personal `ksm_` token (`$PS_TOKEN` or `~/.config/project-state/token`) are both set. `read-context` = `GET {PS_ENDPOINT}/api/harvest/context?project={id}`; `write-doc` + `advance-cursor` + dedup + activity = one `POST {PS_ENDPOINT}/api/harvest/deposit` batch at the end of each surface. The server dedups and advances cursors only for docs it accepted — retries are idempotent, so a failed POST means: keep the batch, retry once, then stop and report. **Never fall back to writing local files when the endpoint is unreachable** — a project has one canonical substrate; queue and retry, don't fork it.
 
+- **Cloud binding (projects whose home is the cloud).** The cloud server reads nobody's mail: it holds no Google,
+  Microsoft, Slack or GitHub keys (decision `2026-09-30-person-side-harvest-no-provider-keys`). The person's own Claude
+  reads their accounts with their own connectors and deposits through the Project State connector:
+  `read-context` = `harvest_context`; `write-doc` + `advance-cursor` + dedup + activity = one `deposit_inbox` call per
+  project and surface. The server keys each item by its own identity (an email's `Message-ID`, a calendar event's own
+  id), so teammates' copies land once. A person chooses which projects their accounts feed with `harvest_lane`
+  (editors only). Unattended, this runs as the person's own claude.ai routine, set up by `project-harvest-setup`.
+
 **Harvester identity** (used for cursor ownership and provenance): `$PS_USER_EMAIL`, else `git config user.email`, else `local`. On the deposit binding the server ignores the claimed identity and uses the token's email.
 
 ---
+
+## Setting up a harvest — not here
+
+"Set up my harvest", "what's harvesting my projects", "add Slack to my harvest" and "why didn't X harvest" belong to
+**`project-harvest-setup`**: it takes the inventory, routes each project by its home (cloud → lanes and the person's
+claude.ai routine; local → the Desktop nightly harvest), and changes nothing without agreement. The operator's guide is
+`docs/HARVEST-GUIDE.md`. This skill does the harvesting itself.
+
+## Harvest once, now (cloud projects)
+
+`harvest_context` for the project, read the surfaces with the person's
+connectors exactly as the recipe says, then `deposit_inbox` per surface. This is also how someone without routines keeps
+a project fed.
 
 ## Cursor management
 
@@ -133,9 +178,9 @@ project-state/harvest/cursors/{email}--{surface}.yaml
 ```
 
 ```yaml
-# project-state/harvest/cursors/keystone@stonemaps.org--slack.yaml
+# project-state/harvest/cursors/david@atomic47.co--slack.yaml
 surface: slack
-email: keystone@stonemaps.org
+email: david@atomic47.co
 cursor: "2026-07-20T00:00:00Z"
 updated_at: "2026-07-23T09:12:00Z"
 ```
@@ -160,12 +205,12 @@ YYYY-MM-DD-{surface}-{slug}.md
 
 ```markdown
 ---
-source: slack                          # slack | gmail | gdocs | scsiwyg | jira | confluence | linear | github
-source_id: "C123/1714389612.123456"   # channel/ts, thread_id, doc_id, post_id, issue_key, page_id
+source: slack                          # slack | gmail | gdocs | scsiwyg | jira | confluence | linear | github | git
+source_id: "C123/1714389612.123456"   # channel/ts, thread_id, doc_id, post_id, issue_key, page_id, digest id
 harvested_at: "2026-05-04T12:00:00Z"
 surface_timestamp: "2026-05-04T09:30:00Z"
-author: "Rafal Rohozinski"
-author_contact: "r.rohozinski@secdev.com"
+author: "Pat Member"
+author_contact: "member@partner.example"
 channel: "#ledger-rt"                  # slack only
 subject: ~                             # gmail only
 doc_title: ~                           # gdocs only
@@ -177,9 +222,9 @@ page_id: ~                             # confluence only
 page_url: ~                            # confluence only
 space: ~                               # confluence only (space key)
 relevance_signals:                     # why this was flagged
-  - contact_match: "r.rohozinski@secdev.com"
+  - contact_match: "member@partner.example"
   - channel_match: "#ledger-rt"
-harvested_by: "keystone@stonemaps.org" # harvester identity (see Substrate binding)
+harvested_by: "david@atomic47.co" # harvester identity (see Substrate binding)
 harvest_plane: local                   # local | server | desktop | claude-ai
 status: inbox                          # always "inbox" on write; curator promotes
 ---
@@ -351,7 +396,8 @@ becomes project intel the curator can link to milestones.
 > a **GitHub MCP connector** (server name `ps_github`; the appliance renders it from
 > an enrolled GitHub PAT via the surface-grant → connector-render generator), OR the
 > **`gh` CLI** (local / desktop, already authenticated). Both are read-only. If
-> neither is available, skip the surface and log it.
+> neither is available, skip the hosted repos and log it — `local_repos` need
+> neither and still run (Step 5f).
 
 ```
 for each repo in surfaces.github.repos:   # or run surfaces.github.query instead
@@ -388,6 +434,79 @@ Commits are **digested per repo per day** (not one doc per commit) so a heavy pu
 lands as a single readable signal; PRs, releases, and issues are one doc each since
 those are already the natural units.
 
+### Step 5f — Local clones (if `surfaces.github.enabled` and `surfaces.github.local_repos` is non-empty)
+
+For a repository that is simply cloned on this machine — no GitHub connector, no `gh`,
+or a remote that isn't GitHub at all. Runs wherever this skill runs on the machine
+holding the clone (file binding, or the deposit binding from that machine). A claude.ai
+routine cannot reach a local path; the cloud harvest reads its own clone (see
+`project-harvest-setup`).
+
+> **Read-only, always.** Only `git log`, `git rev-parse`, `git symbolic-ref`,
+> `git for-each-ref` — through the helper below, which refuses anything else and runs
+> with `GIT_OPTIONAL_LOCKS=0`. **Never** `fetch`, `pull`, `checkout`, `switch`, `reset`,
+> `stash`, `gc` or any write in the user's clone: the harvest reads what the clone
+> already holds. Commits not yet pulled arrive on the first harvest after the user pulls.
+
+**Don't hand-parse `git log`.** The helper shipped with this skill does the reading and
+the digesting deterministically:
+
+```bash
+python3 <this skill>/scripts/git_digest.py --repo <path> --name <name> \
+    --since <cursor ISO, e.g. 2026-10-20T00:00:00Z> [--branch <branch>] [--tags]
+```
+
+It prints one JSON object: `branch` (the configured one, else the branch HEAD is on),
+`head`, `cursor` (newest committer time seen; `--since` unchanged when nothing is new),
+`days[]` — one per UTC date of the committer time, each with `source_id`, `dedup_key`,
+`count`, `first_at`, `last_at` and `commits[]` (`sha`, `ref` = `<name>@<sha>`, `parents`,
+`merge`, `author`, `email`, `authored_at`, `committed_at`, `subject`) — and, with
+`--tags`, `tags[]` created after the cursor. Merge commits are kept and flagged; author
+names that aren't UTF-8 are decoded as Latin-1. Exit 2 with `{"error": ...}` means the
+path isn't a clone's root, the branch doesn't exist, or the repo isn't a safe.directory.
+
+```
+cursor = this identity's `git` cursor (harvest/cursors/{email}--git.yaml)
+for each entry in surfaces.github.local_repos:
+  name   = entry.name or basename(entry.path)
+  run git_digest.py --repo entry.path --name name --since cursor
+                    [--branch entry.branch] [--tags if 'releases' in events]
+  exit 2 → log "git: <name>: <error>", skip this repo, mark the surface as errored
+           (its cursor does not move); carry on with the next repo
+  if 'commits' in events:
+    → ONE inbox doc per day in days[] — the same digest as Step 5e: one line per commit
+      (short sha, first line, author; "(merge)" after a merge commit's subject)
+  if 'releases' in events:
+    → one doc per tag in tags[]: tag, sha, tag subject — a release is only a tag here
+  pulls / issues / CI results: a clone has none — log ONE line per repo per run,
+    "git: <name>: pulls, issues and CI results not available from a local clone — skipped",
+    not an error, and never retry them
+  → frontmatter: source=git, source_id=<day or tag source_id from the helper>,
+    repo=<name>, branch=<branch>, ref_url=~ (none: local), author=<the day's authors,
+    comma-separated>, surface_timestamp=<last_at or tag created_at>,
+    relevance_signals=[{repo_match: <name>}] plus keyword/contact matches as in 5e
+new git cursor = max(helper cursor) across the repos, only if every repo ran clean
+```
+
+**Source, cursor and dedup — decided, keep stable.** Local-clone items carry
+`source: git`, not `github`, and their own cursor surface `git`, so a hosted harvest and a
+local one never share or block each other's cursor. Dedup keys (`{surface}:{source_id}`
+in `harvest/seen.json`) are:
+
+| Item | Dedup key |
+|---|---|
+| day digest | `git:<name>#commit-digest:<YYYY-MM-DD>@<newest short sha>` |
+| tag | `git:<name>#tag:<tag>` |
+| (hosted, Step 5e, unchanged) | `github:<owner/repo>#commit-digest:<YYYY-MM-DD>` |
+
+They are distinct from the hosted keys even for the same repository — a project that
+names a repo in both `repos` and `local_repos` gets two digests a day; name it once. The
+newest short sha in the day key means a second harvest the same day that finds later
+commits is a new digest (carrying only the commits after the cursor), and a re-run over
+the same commits is the same key, skipped by `seen.json`. Inbox filename:
+`{YYYY-MM-DD}-git-{name}-commits.md` (`-{tag}` for a tag; append the short sha when that
+day already has one).
+
 ### Step 6 — Write inbox docs
 
 For each item flagged for ingest:
@@ -410,6 +529,7 @@ For each surface that completed without error, write this identity's cursor file
 | gdocs / scsiwyg | now |
 | jira / confluence / linear | max issue/page updated seen |
 | github | max commit/PR/release/issue timestamp seen |
+| git (local clones) | max commit time seen — the helper's `cursor`, max across repos |
 
 File binding: rewrite `harvest/cursors/{email}--{surface}.yaml` (single-writer per identity — no lock needed). Deposit binding: the proposed cursor rides in the deposit batch and the server advances it only past accepted docs.
 
@@ -444,6 +564,7 @@ Return a summary:
 /project-harvester --surface gmail,gdocs   # comma-separated surfaces
 /project-harvester --surface jira,linear   # connector surfaces (jira | confluence | linear)
 /project-harvester --surface github        # commits (digested), PRs, releases, issues
+/project-harvester --surface git           # local clones only (surfaces.github.local_repos)
 /project-harvester --dry-run               # show what would be written, don't write
 /project-harvester --no-advance-cursor     # harvest but don't move cursors (re-run safe)
 ```
@@ -453,6 +574,8 @@ Return a summary:
 ## Deduplication
 
 Dedup key: `{surface}:{source_id}`. Stored in `project-state/harvest/seen.json` as a set of hashed keys. On each write attempt, hash the key and check the set. If present, skip. After writing, add to set.
+
+Local clones use the surface `git` and the keys Step 5f lists, never `github:` keys.
 
 `seen.json` is append-only — never prune. It stays small (one 12-byte hash per harvested item).
 
@@ -483,6 +606,11 @@ Sources are swept by evidence tier (schema `evidence_source_tiers`):
   watched repos (the existing Step 5e sweep, filtered through the frontier keywords/paths).
   `ci_build` failures on experiment branches are machine-timestamped failed-trial
   evidence — propose them, don't skip them.
+  **Local clones count the same** (Step 5f, `source: git`): each commit in a day digest is
+  swept individually through the same keywords/paths, and its reference is `<name>@<sha>`
+  (the helper's `ref`). They join the correlation pass exactly like hosted commits — a Jira
+  key in a commit message links it to the issue. A clone gives no PRs, issues or CI builds,
+  so those joins come only from hosted repos or Jira.
 - **Tier 2 — Slack** (`hints.slack.channels`) and **Google Docs** (`hints.gdocs.folders`):
   matched the same way, but the stub MUST capture a verbatim `excerpt` and permalink at
   propose time — these sources are editable/deletable, and the excerpt is what survives
@@ -539,13 +667,15 @@ once in the harvest summary ("sred enabled but no criteria — run define_criter
 | `project-state/` not found        | Fail fast — wrong working directory (file binding) |
 | Deposit endpoint unreachable       | Retry once; then stop and report. Cursor unchanged. Do NOT write local files instead |
 | Deposit rejects batch (401/403)    | Stop; report token/grant problem; nothing written |
+| Local clone missing / not a repo / unknown branch (`git_digest.py` exit 2) | Skip that repo; log the helper's `error`; `git` cursor unchanged; continue |
+| PRs / issues / CI asked of a local clone | One logged line per repo, not an error (Step 5f) |
 
 ---
 
 ## What this skill does NOT do
 
 - Does not classify or promote docs — that's `project-document-curator`
-- Does not send or modify anything on any surface — read-only
+- Does not send or modify anything on any surface — read-only. In a local clone that means no fetch, pull, checkout or write of any kind (Step 5f)
 - Harvests GitHub as a first-class surface (Step 5e) — commits (digested per repo/day), PRs, releases, issues for the watched repos. (This supersedes the earlier "GitHub lives only in work-state" stance; work-state remains the raw event store, project-harvester is the project-scoped lens.)
 - Does not run sentiment analysis — that's downstream
 - Does not replace the work-state harvesters — it's a project-scoped lens on the same surfaces

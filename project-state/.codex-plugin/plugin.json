@@ -1,30 +1,41 @@
 {
   "name": "project-state",
-  "version": "4.9.0",
-  "description": "A local-first operational substrate for multi-stakeholder projects, with 42 skills for milestones, reporting, compliance, grants, SR&ED, tenders, and project documentation.",
+  "version": "5.7.4",
+  "description": "A local-first operational substrate for multi-stakeholder projects: milestones, objectives and KPIs, phase gates, documents, status reports, funder compliance, SR&ED, tenders, competitive intel, portfolios and research, shaped by swappable packs.",
   "author": {
-    "name": "Atomic 47 Labs",
+    "name": "Worksona",
+    "email": "david@atomic47.co",
     "url": "https://atomic47.co"
   },
-  "homepage": "https://github.com/Atomic-47-Labs/project-state-plugin-public",
-  "repository": "https://github.com/Atomic-47-Labs/project-state-plugin-public",
+  "homepage": "https://github.com/Atomic-47-Labs/project-state-chatgpt",
+  "repository": "https://github.com/Atomic-47-Labs/project-state-chatgpt",
   "license": "MIT",
   "keywords": [
     "project-management",
     "milestones",
+    "objectives",
+    "kpis",
+    "okr",
     "reporting",
     "compliance",
     "grant-management",
     "sred",
-    "tenders",
-    "project-state"
+    "t661",
+    "scaffolding",
+    "jira",
+    "project-state",
+    "onboarding",
+    "intel",
+    "portfolio",
+    "research"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Project State",
     "shortDescription": "Project operations, reporting, and compliance skills.",
-    "longDescription": "Manage project state, milestones, objectives, phase gates, documents, reports, grants, Canadian SR&ED records, tender intelligence, and compliance packs from a shared local-first substrate.",
-    "developerName": "Atomic 47 Labs",
+    "longDescription": "Manage project state, milestones, objectives, phase gates, documents, reports, grants, Canadian SR&ED records, tenders, competitive intel, portfolios and research from a shared local-first project-state/ folder. Where the host can run it, a bundled local server checks and signs every write.",
+    "developerName": "Worksona",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
@@ -32,9 +43,9 @@
     ],
     "websiteURL": "https://atomic47.co",
     "defaultPrompt": [
-      "Scaffold a new project-state facility.",
-      "Show me the current project state and risks.",
-      "Generate a weekly project status report."
+      "Set up Project State for this project.",
+      "What needs attention on this project today?",
+      "Draft this week's status report."
     ]
   }
 }

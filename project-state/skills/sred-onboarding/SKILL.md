@@ -1,9 +1,23 @@
 ---
 name: sred-onboarding
-description: "Guided onboarding for the Canadian SR&ED capability. Runs seven chapters: claimant identity (legal name, Business Number, fiscal year end), advisor engagement, capability enablement, the capture lens (Layer 2 innovation criteria), first uncertainty capture from real in-flight work, evidence-source wiring, and an orientation check that ends on a real filing date. Refuses to enable without a fiscal year end — every SR&ED deadline is computed from it. Writes through project-state's capability enable verb; delegates the criteria interview and TU capture to project-sred-tracker. Never asserts eligibility and never files. Use when the user says 'set up SR&ED', 'onboard SR&ED', 'enable SR&ED', 'turn on SR&ED tracking', 'start capturing SR&ED', 'we want to claim SR&ED', 'get us ready for the T661', 'how do we start with SR&ED', or when project-onboarding hands off after the operator answers yes to the SR&ED question."
+description: "Set up SR&ED (Canadian R&D tax credit) tracking on a project — 'set up SR&ED', 'enable SR&ED', 'we might qualify for SR&ED'. Collects fiscal year end, claimant and advisor details first."
+metadata:
+  map:
+    tier: capability
+    stage: ingest
+    requires: [memory]
+    inputs: [operator]
+    writes: [manifest, sred]
+    calls: [project-state, project-sred-tracker]
 ---
 
 # SR&ED Onboarding
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> Guided onboarding for the Canadian SR&ED capability. Runs seven chapters: claimant identity (legal name, Business Number, fiscal year end), advisor engagement, capability enablement, the capture lens (Layer 2 innovation criteria), first uncertainty capture from real in-flight work, evidence-source wiring, and an orientation check that ends on a real filing date. Refuses to enable without a fiscal year end — every SR&ED deadline is computed from it. Writes through project-state's capability enable verb; delegates the criteria interview and TU capture to project-sred-tracker. Never asserts eligibility and never files. Use when the user says 'set up SR&ED', 'onboard SR&ED', 'enable SR&ED', 'turn on SR&ED tracking', 'start capturing SR&ED', 'we want to claim SR&ED', 'get us ready for the T661', 'how do we start with SR&ED', or when project-onboarding hands off after the operator answers yes to the SR&ED question.
 
 ## Purpose
 
@@ -177,6 +191,38 @@ Frame it before asking anything:
 > So before we record anything, let's declare where *your* frontier is. That declaration becomes
 > the lens: it decides what gets flagged for capture, what the harvester watches for, and what
 > the weekly digest calls out as uncaptured.
+
+**First, the company layer (Layer 1).** The pack's `innovation-criteria.yaml` ships as a blank
+template — it holds `"<...>"` placeholders, never another company's lens. Resolve the claimant's
+Layer 1 in this order and stop at the first hit:
+
+1. `sred/company-criteria.yaml` in this substrate — already filled: read it back and confirm.
+2. A forked pack (`manifest.yaml → capabilities.sred.pack` is not `sred-canada`) whose
+   `profiles/innovation-criteria.yaml` carries no placeholders — the org shares one lens across
+   projects. Read it back; write nothing here.
+3. Otherwise, interview for it:
+
+> **Q4.0a** The claimant is `<claimant_org>` (from Chapter 1) — is that the company whose
+> practice this lens describes? *(pre-filled; a group filing for a subsidiary may differ)*
+
+> **Q4.0b** Which CRA fields of science does the company claim under? Start from
+> `field_of_science_default` (Chapter 1) and ask whether there are others.
+
+> **Q4.0c** What is established practice in your domains — the work your team does that the
+> field already knows how to do? Name three to six. These are the things the lens will treat
+> as routine unless a project names a specific frontier inside them.
+
+Frame each baseline item field-relative as you record it ("standard REST integration per vendor
+docs", not "things we find easy"). An operator who cannot name any is giving a legitimate
+answer: leave the single placeholder line and say the reviewer will skip the company check
+until it is filled.
+
+Copy the pack template, fill `company`, `fields_of_science` and `technology_baseline` from the
+answers, keep `exemplars` empty and `house_language` / `advisor_guidance` as shipped, and write
+it through `project-state` to **`sred/company-criteria.yaml`** (`entity_put` when the project's
+MCP serves it), then log `sred.criteria.updated` with `layer: 1`. Never write the values into
+the pack profile itself — the plugin overwrites it on update, and it is shared by every project
+on the install. Show the file before writing; this is a draft the operator confirms.
 
 Then **delegate to `project-sred-tracker` `define_criteria()`**. That op owns the interview — the
 frontier walk, the routine boundary, the harvester hints, and the framing check against the

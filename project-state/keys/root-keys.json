@@ -1,0 +1,4 @@
+{
+  "note": "Root public keys that certify Project State directory and server keys (docs/DIRECTORY-AND-LICENCE-SPEC.md §4). Empty until the root ceremony: while it is empty nothing verifies, and a server given PS_DIRECTORY_URL refuses to start. The named Atomic 47 root holders add the production root key here at that ceremony, from the root-public.json that services/state-mcp/bin/root-sign.mjs keygen wrote on their offline machine, and it ships in the next release.",
+  "keys": []
+}

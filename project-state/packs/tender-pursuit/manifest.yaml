@@ -2,16 +2,21 @@ pack:
   id: "tender-pursuit"
   name: "Tender Pursuit Defaults"
   version: "1.0.0"
-  compatible_core: ">=4.0,<5.0"
+  compatible_core: ">=4.0,<6.0"
   description: |
-    Pack for facilities running the tender-intelligence package. Configures the
+    Pack for facilities running the tender package. Configures the
     notifier's alert thresholds and immediate-alert rules, a weekly pipeline
     review meeting, and reporting-matrix lines for pipeline reporting. Pair with
     any other pack — tender pursuit composes with grant, client, or agile packs.
   authors:
     - "David Olsson <david@atomic47.co>"
+  governing_documents:
+    - "capabilities/tender/README.md (hosting shape: a tender is watched by a project, not a facility)"
+    - "capabilities/tender/surfaces.yaml (the capability's declared surfaces — its spec: reference)"
+    - "docs/TENDER-ONEPAGER.md"
   released: "2026-07-21"
   maturity: "stable"
+  axis: capability   # bundled by a capability; never listed in a project pack picker (PROJECT-TYPES-SPEC section 3)
 
 provides:
   profiles:
@@ -21,7 +26,7 @@ provides:
 
 requires:
   packages:
-    - tender-intelligence
+    - tender
 
 # ----------------------------------------------------------------------------
 # Defaults this pack suggests to a facility that loads it

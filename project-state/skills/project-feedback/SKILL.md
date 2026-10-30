@@ -1,9 +1,22 @@
 ---
 name: project-feedback
-description: "Register defects and requests against the project-state product itself. Captures reports from any source — inline user report, seed-issue curation flags on harvested signals, or an opt-in skill-error log — as feedback/FB-NNN-slug.yaml substrate records, triages them (dedup, in-repo verification with file:line notes, type/component/severity), and projects them to GitHub issues idempotently: first filing writes github_issue back onto the record; re-runs update, never duplicate. Sync pulls issue status back (resolved/verified) via the harvester's GitHub sweep. Use whenever the user says 'file a bug', 'log this bug', 'report an issue', 'register this feedback', 'found a plugin bug', 'the skill misbehaved', 'capture feedback from signals', 'sync feedback', 'list open feedback', or when curation flags a doc with seed-issue. Spec: docs/FEEDBACK-AND-ISSUES-SPEC.md; adopted by decision 2026-08-11-adopt-feedback-issues-spec. Trigger: /project-feedback"
+description: "Report a bug or request against project-state itself — 'file feedback', 'this skill got it wrong', 'feature request for project-state'. Records FB-NNN entries."
+metadata:
+  map:
+    tier: P3
+    stage: keep
+    requires: [memory]
+    reads: [feedback]
+    writes: [feedback]
 ---
 
 # Project Feedback
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> Register defects and requests against the project-state product itself. Captures reports from any source — inline user report, seed-issue curation flags on harvested signals, or an opt-in skill-error log — as feedback/FB-NNN-<slug>.yaml substrate records, triages them (dedup, in-repo verification with file:line notes, type/component/severity), and projects them to GitHub issues idempotently: first filing writes github_issue back onto the record; re-runs update, never duplicate. Sync pulls issue status back (resolved/verified) via the harvester's GitHub sweep. Use whenever the user says 'file a bug', 'log this bug', 'report an issue', 'register this feedback', 'found a plugin bug', 'the skill misbehaved', 'capture feedback from signals', 'sync feedback', 'list open feedback', or when curation flags a doc with seed-issue. Spec: docs/FEEDBACK-AND-ISSUES-SPEC.md; adopted by decision 2026-08-11-adopt-feedback-issues-spec. Trigger: /project-feedback
 
 ## Purpose
 
@@ -67,6 +80,7 @@ feedback:
   default_labels: ["bug"]
   label_map: { bug: [bug], enhancement: [enhancement], question: [question], docs: [documentation] }
   file_mode: direct          # direct until spec piece 5 (queue action) lands; then queue
+  data_risk_autofile: false  # true lets severity: data-risk records skip the confirmation pause
   auto_capture:
     curator_flag: true       # honor action_flags: [seed-issue]
     skill_errors: false      # opt-in; drains logs/feedback-candidates.ndjson
@@ -102,8 +116,14 @@ or `harvest`.
 Render the issue body (template below). In `file_mode: direct`: show the drafted issue to the
 user, get explicit confirmation, run `gh issue create`, write `github_issue` + `github_url`
 back, `status: filed`, log `feedback.filed`. A record that already has `github_issue` is
-**updated** (`gh issue edit` / comment), never re-created. `severity: data-risk` records may
-file without the confirmation pause — with a loud log line — per spec §9 proposal.
+**updated** (`gh issue edit` / comment), never re-created.
+
+`severity: data-risk` records pause for confirmation like any other. Only when the manifest sets
+`feedback.data_risk_autofile: true` may they file without the pause — and then with a loud log
+line (`feedback.filed` carrying `autofiled: true, reason: data-risk`) and a line in your reply
+naming the issue URL. The setting is absent or `false` by default: for a client org an
+unprompted outbound GitHub issue is a surprise, and an operator who wants the fast path turns
+it on deliberately (spec §9.2).
 
 When piece 5 lands, default switches to queueing an outbox card (`kind: github_issue`) and the
 queue's approve action performs the create.
@@ -146,8 +166,8 @@ _Registered from project-state feedback record FB-NNN._
   the record, it doesn't rewrite the report.
 - **Verify before filing when the code is readable.** Every claim in a filed issue carries a
   file:line citation or an explicit "unverified" marker.
-- **Filing is outward.** Direct mode requires explicit user confirmation per filing session
-  (data-risk severity excepted, loudly).
+- **Filing is outward.** Direct mode requires explicit user confirmation per filing session.
+  Data-risk severity skips it only under `feedback.data_risk_autofile: true`, and loudly.
 - **This is not a support desk.** Pilot support threads route per the P-SPP D6 decision; only
   product defects/requests become FB records.
 

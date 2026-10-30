@@ -17,8 +17,8 @@ schema_version: 1
 manifest_kind: project
 
 project:
-  short_name: "TODO-ProjectShortName"       # e.g., "Ai26.10"
-  pic_project_number: "TODO-ProjectNumber"   # e.g., "Ai26.10"
+  short_name: "TODO-ProjectShortName"       # e.g., "AB12.34"
+  pic_project_number: "TODO-ProjectNumber"   # e.g., "AB12.34"
   long_name: "TODO-LongProjectTitle"
   proposal_title: "TODO-FullProposalTitle"
   one_liner: |

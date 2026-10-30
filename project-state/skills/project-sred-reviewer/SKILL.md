@@ -1,9 +1,22 @@
 ---
 name: project-sred-reviewer
-description: "Review and strengthen Canadian SR&ED T661 narratives for audit resistance. Reads from sred/ substrate (TU/EX/ADV records + evidence log) or accepts pasted T661 draft text. Produces: CRA-reviewer critique, cross-section traceability check, cost-framing assessment, risky language flags, safer rewrites for Sections E/F/G, CRA attack simulation with defenses, and a readiness verdict. Active when sred-canada pack is loaded. Use whenever the user says 'review the T661', 'SR&ED audit check', 'is our claim defensible', 'strengthen the narrative', 'CRA review simulation', 'pre-submission check', 'rewrite section E', or any request to critique or improve SR&ED submission content."
+description: "Review and strengthen a Canadian SR&ED T661 narrative for audit resistance — 'review the T661', 'is this SR&ED claim defensible', 'critique the narrative'. CRA-reviewer critique and traceability checks."
+metadata:
+  map:
+    tier: capability
+    stage: keep
+    requires: [memory]
+    reads: [sred]
+    produces: [t661-narrative]
 ---
 
 # Project SR&ED Reviewer
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> Review and strengthen Canadian SR&ED T661 narratives for audit resistance. Reads from sred/ substrate (TU/EX/ADV records + evidence log) or accepts pasted T661 draft text. Produces: CRA-reviewer critique, cross-section traceability check, cost-framing assessment, risky language flags, safer rewrites for Sections E/F/G, CRA attack simulation with defenses, and a readiness verdict. Active when sred-canada pack is loaded. Use whenever the user says 'review the T661', 'SR&ED audit check', 'is our claim defensible', 'strengthen the narrative', 'CRA review simulation', 'pre-submission check', 'rewrite section E', or any request to critique or improve SR&ED submission content.
 
 ## Purpose
 
@@ -62,7 +75,9 @@ For each TU, test whether it is:
 | "our team had never..." / "we didn't have a way to..." | **Company-relative framing — "new to us" is ineligible; the standard-practice test is field-level** | "No established method in the field existed for..." |
 
 **Check against the criteria layers** (when present): critique each TU against the company
-baseline and exemplars (pack `innovation-criteria.yaml`) and the project criteria
+baseline and exemplars (`sred/company-criteria.yaml`, else a forked pack's filled
+`innovation-criteria.yaml`; the shipped profile is a blank template — if only placeholders
+are found, say no company lens is declared and skip this half) and the project criteria
 (`sred/criteria.yaml`). Flag any TU built on work the criteria declare routine — either the
 claim or the criteria is wrong, and the discrepancy must be resolved on the record, not
 papered over. Flag any `standard_practice_gap` that reads company-relative per the Layer 0
@@ -104,7 +119,18 @@ For each ADV, verify:
 
 ### Step 5 — Cross-section traceability
 
-Build the chain: **uncertainty → experiment → result → advancement**
+In Mode A, run the validator first and include its findings in the review:
+
+```bash
+python3 capabilities/sred/validator/scripts/check.py <facility>/project-state --json
+```
+
+(In an installed plugin: `<plugin>/capabilities/sred/validator/scripts/check.py`; it reads only.)
+Its `trace.*`, `ref.*`, `evidence.*` and `ex.*` findings are the mechanical half of Steps 5 and 8:
+cite each by rule id, file and entity rather than re-deriving it, and put every `fail` among the
+biggest audit risks. If it cannot run (exit 2), say so and do this step by reading.
+
+Then build the chain: **uncertainty → experiment → result → advancement**
 
 For each TU:
 - Is there at least one EX? If not: flag as incomplete
@@ -248,12 +274,24 @@ Common CRA objections to simulate:
 11. Is any uncertainty framed company-relative ("new to us") rather than field-relative?
 12. Does any claim rest on work the project's own criteria (`sred/criteria.yaml`) declare routine?
 13. Is any experiment evidenced solely by tier-2 records (Slack, Docs, meeting notes)? Flag as weak — recommend tier-1 anchoring (Jira, Confluence version, commit, test output) while the records still exist.
+14. Does the validator (`validator/scripts/check.py`) report any `fail`? Each one is listed in the review with its rule id.
 
 ## Integration
 
 - **project-sred-tracker** — primary input source (TU/EX/ADV entities + evidence log); this skill is called after tracker generates the T661 narrative draft
 - **project-funder-reporting** — reporting matrix `sred.t661-review` entry triggers this skill before the advisor handoff package is prepared
-- **project-state** — review findings can be written back to TU/EX/ADV records as `review_notes`
+- **project-state** — review findings can be written back to TU/EX/ADV records as `review_notes`, one structured item per finding (`docs/SRED-CAPABILITY-SPEC.md` §4.2, schema `review_note`):
+
+  ```yaml
+  review_notes:
+    - date: 2026-09-20
+      by: project-sred-reviewer
+      severity: high          # high | medium | low — audit risk to the record, never eligibility
+      finding: Section F cites a 0.5% drop rate with no build or test record behind it.
+      status: open            # open | resolved; a resolved note gains `resolution:`
+  ```
+
+  Append notes; never rewrite an earlier one. Plain-string notes from older reviews stay valid.
 - **project-notifier** — review verdict can be routed to SR&ED lead
 
 ## Reference

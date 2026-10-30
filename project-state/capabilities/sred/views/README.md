@@ -8,7 +8,7 @@ Declarative view specs for the SR&ED capability, plus the first mounted renderer
 | `sred-deadlines.dash.yaml` | Declarative spec — one strip per open fiscal year |
 | `build-sred-dashboard.mjs` | **Renderer.** Both views above, plus gap findings, effort basis and handoff gates, as one self-contained HTML page |
 | `dashboard.template.html` | The page shell the renderer fills — edit here to change the design |
-| `lib-yaml.mjs` | Minimal YAML reader scoped to substrate shapes (no dependencies) |
+| `lib-yaml.mjs` | Minimal YAML reader scoped to substrate shapes (no dependencies). Throws on what it cannot read — never a truncated record |
 
 ## Running it
 
@@ -26,6 +26,9 @@ Writes `<facility>/reports/adhoc/sred-dashboard.html` by default. Options:
 | `--json <path>` | Also write the derived data, for other consumers |
 
 No dependencies, no install step, no network. Node 18+.
+
+Test: `python3 scripts/test-sred-dashboard.py` (repo root). Sample:
+`python3 scripts/build-capability-samples.py --only sred`.
 
 ## What it reads
 
@@ -47,6 +50,14 @@ and needs no lock.
   when a `capture_note` discloses the back-fill), evidence going stale on an active experiment,
   completed experiment with no advancement, milestone anchors that have not started,
   and drift between `state/sred.json` counters and the files on disk.
+- **Not reviewable** — a facility with no uncertainty and no experiment trips none of the checks
+  above. It is reported as "nothing recorded yet — not reviewable", never as an all-clear.
+- **Unreadable records** — a YAML file the reader cannot parse is a `high` finding naming the
+  file and the line, and a console warning. It is never dropped quietly: a missing record makes
+  every other check read cleaner than the facility is.
+- **Inbox** — single-record evidence stubs, and cluster stubs from the harvester's correlation
+  pass (`{suggested_ex, records, window, corroboration}`) drawn as one card listing their records.
+- **Review notes** — either form `review_notes` takes (`docs/SRED-CAPABILITY-SPEC.md` §4.2).
 - **Filing window** — the rail runs from the first day of the fiscal year to the statutory
   FY+18mo deadline, with the internal FY+15mo target marked. Tiers follow
   `sred-deadlines.dash.yaml`: red ≤90d, amber ≤180d, green beyond.
