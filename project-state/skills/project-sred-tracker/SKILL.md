@@ -1,9 +1,23 @@
 ---
 name: project-sred-tracker
-description: "Continuous SR&ED work capture for Canadian T661 claims. Records technological uncertainties (TUs), experiments (EXs), technological advancements (ADVs), and contemporaneous evidence entries into sred/ substrate. Enforces TU→EX→ADV traceability. Runs gap analysis, weekly progress digests, quarterly completeness reviews, cost roll-ups, and the innovation-criteria interview. Active when the sred capability is enabled. Use whenever the user says 'record a technical uncertainty', 'log SR&ED work', 'add an experiment', 'capture an advancement', 'SR&ED evidence', 'what's our SR&ED status', 'weekly SR&ED update', 'SR&ED digest', 'quarterly SR&ED review', 'gap analysis', 'define innovation criteria', 'what counts as innovation here', 'is this SR&ED', 'evaluate this SR&ED opportunity', 'screen this for SR&ED', or any request to track or screen experimental development work for CRA."
+description: "Capture SR&ED work as it happens — 'log an uncertainty', 'record this experiment', 'we learned X', 'SR&ED note'. Records uncertainties, experiments, advancements and evidence for the T661."
+metadata:
+  map:
+    tier: capability
+    stage: keep
+    requires: [memory]
+    reads: [sred, log]
+    writes: [sred]
+    produces: [t661-narrative]
 ---
 
 # Project SR&ED Tracker
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> Continuous SR&ED work capture for Canadian T661 claims. Records technological uncertainties (TUs), experiments (EXs), technological advancements (ADVs), and contemporaneous evidence entries into sred/ substrate. Enforces TU→EX→ADV traceability. Runs gap analysis, weekly progress digests, quarterly completeness reviews, cost roll-ups, and the innovation-criteria interview. Active when the sred capability is enabled. Use whenever the user says 'record a technical uncertainty', 'log SR&ED work', 'add an experiment', 'capture an advancement', 'SR&ED evidence', 'what's our SR&ED status', 'weekly SR&ED update', 'SR&ED digest', 'quarterly SR&ED review', 'gap analysis', 'define innovation criteria', 'what counts as innovation here', 'is this SR&ED', 'evaluate this SR&ED opportunity', 'screen this for SR&ED', or any request to track or screen experimental development work for CRA.
 
 ## Purpose
 
@@ -27,6 +41,9 @@ Plus the **evidence log** (`sred/evidence-log.ndjson`) — the contemporaneous r
 - "what's our SR&ED status" / "quarterly SR&ED review"
 - "SR&ED gap analysis" / "are we ready for the T661"
 - "how much SR&ED work have we captured"
+- "confirm the SR&ED evidence" / "go through the SR&ED inbox" / "reject that proposal"
+- "update TU-02" / "correct the date on EX-01" / "mark EX-03 complete"
+- "roll up SR&ED costs" / "reconcile the cost worksheet" / "move FY2026 to costing"
 - Any milestone completion that involved experimental development
 
 ## Entity schemas
@@ -64,8 +81,9 @@ status: "active"    # active | resolved | removed
 resolution: ~       # if resolved: brief statement of how uncertainty was resolved
 
 # Meta
-created_by: "TODO"
+created_by: "<actor>"             # the person, per project-state "Who the actor is"
 last_modified: "YYYY-MM-DDThh:mm:ssZ"
+revisions: []       # written by update_record: {at, by, fields, reason, prior} — on EX and ADV too
 ```
 
 ### Experiment / Work Stream — `sred/experiments/EX-NN-<slug>.yaml`
@@ -120,7 +138,7 @@ status: "in_progress"  # in_progress | complete | abandoned
 abandonment_reason: ~  # if abandoned: why
 
 # Meta
-created_by: "TODO"
+created_by: "<actor>"             # the person, per project-state "Who the actor is"
 last_modified: "YYYY-MM-DDThh:mm:ssZ"
 ```
 
@@ -151,7 +169,7 @@ established_date: "YYYY-MM-DD"  # when the advancement was achieved / knowledge 
 fiscal_year: "YYYY"
 
 # Meta
-created_by: "TODO"
+created_by: "<actor>"             # the person, per project-state "Who the actor is"
 last_modified: "YYYY-MM-DDThh:mm:ssZ"
 ```
 
@@ -177,9 +195,10 @@ last_modified: "YYYY-MM-DDThh:mm:ssZ"
 
 ## Operations
 
-### `record_uncertainty(fields)`
+### `record_uncertainty(fields)` — also answers to `record_tu`
 
-Create a new TU-NN record. Required fields:
+Create a new TU-NN record. `record_tu` is the same operation under its short name (the
+app's SR&ED starter prompt uses it). Required fields:
 - `uncertainty_statement` — in CRA-preferred language ("It was uncertain whether...")
 - `standard_practice_gap` — why existing knowledge didn't resolve it
 - `identified_date` — ideally before experimental work begins
@@ -232,19 +251,136 @@ time — the source may be edited or deleted later; the excerpt is what survives
 When an EX's evidence is entirely tier-2, say so at capture time and suggest a
 tier-1 anchor (file the finding as a Jira comment, commit the note to the repo).
 
-**Cluster confirmation:** when a `sred/inbox/` proposal is a correlation cluster
-(one thread of work joined across Jira/GitHub/Confluence — see the harvester's
-correlation pass), `confirm_evidence` writes one evidence entry per record with
-`corroborated_by` cross-references to the rest of the cluster, and records the
-cluster's earliest source timestamp. One human decision, N cross-referenced
-receipts. **Date corroboration:** if a cluster's earliest timestamp predates the
-linked TU's `identified_date` or EX's `start_date`, surface it — either the dates
-need correcting toward the (defensible, server-timestamped) source record, or the
-work predates the declared uncertainty and the framing needs an honest look.
+Evidence proposed by the harvester does not come through here; it waits in `sred/inbox/`
+for `confirm_evidence` below.
+
+### `update_record(id, changes, reason)`
+
+Revise a TU, EX or ADV that is already on file: a back-filled TU sharpened once the
+experiments land, a date corrected toward a server-timestamped source, an EX marked
+complete, a statement narrowed for proportionality. Records are edited in place; the trail
+lives on the record and in the activity log, so nothing about the revision is hidden.
+
+1. Read the record. Refuse an `id` that does not exist, and refuse changes to `id`,
+   `entity`, `created_by` or `schema_version`.
+2. `reason` is required: one plain sentence in the user's words ("TU-02 restated after
+   EX-03 showed the bottleneck is the merge, not the parse"). Do not write it for them.
+3. Apply `changes` and append one entry to the record's `revisions:` list (create it if
+   absent): `{at: <ISO8601>, by: <actor>, fields: [<changed field names>], reason, prior:
+   {<field>: <old value>}}`. Keep `prior` for every changed field, so the record shows what
+   it said before.
+4. Re-run the checks the create operation runs. On a TU, moving `identified_date` later
+   than a linked EX's `start_date`, or earlier at all, is a backdating question: show the
+   old and new dates and the linked EX dates, and proceed only on the user's explicit yes.
+   Never move `identified_date` earlier to tidy a chain; correct toward the source record
+   or leave it.
+5. Status changes use the same operation: a TU to `resolved` (with `resolution`) or
+   `removed`, an EX to `complete` or `abandoned` (with `abandonment_reason`).
+6. Emit `sred.tu.updated` / `sred.ex.updated` / `sred.adv.updated` with `{id, fields,
+   reason}`. A TU reaching `resolved` also emits `sred.tu.resolved`; an EX reaching
+   `complete` also emits `sred.ex.completed`. Then `render_dashboard()`.
+
+Evidence-log entries are never edited: a correction to logged evidence is a new
+`log_evidence` entry that says what it corrects (`corrects: <timestamp of the entry>`).
+
+### `confirm_evidence(stub, decisions?)`
+
+Promote a harvester proposal from `sred/inbox/` into the evidence log. This is the human
+decision the harvester is never allowed to make: run it only on the user's say-so, one stub
+(or one cluster) at a time, or over a list the user has gone through and approved.
+
+1. Read the stub. Show the user what it says, its source, and the EX (or TU) it suggests.
+   The link is the user's call: `suggested_ex` is a suggestion. A stub with no EX or TU to
+   link to cannot be confirmed; offer `record_uncertainty` / `record_experiment` first, or
+   leave it in the inbox.
+2. **Single stub** (`{date, source: {surface, ref}, suggested_ex, tier?, description_draft,
+   excerpt?, people}`): append ONE entry with `log_evidence`'s shape plus
+   `entry_type: harvested`, `source: {surface, ref}`, `record_reference: <source.ref>`,
+   `record_type` from the source, `date` = the source's own date (the date of the work,
+   never today), `description` = `description_draft` as written or as the user edits it,
+   and `excerpt` carried over. Tier-2 stubs without an `excerpt` cannot be confirmed:
+   capture the verbatim excerpt and permalink first.
+3. **Cluster stub** (`{suggested_ex, records: [...], window, corroboration}`): one
+   decision, one entry per record. Each entry carries `corroborated_by:` listing the
+   other records in the cluster (`{record_type, reference}`), and the cluster's earliest
+   source timestamp is reported to the user. **Date corroboration:** if that earliest
+   timestamp predates the linked TU's `identified_date` or EX's `start_date`, surface it —
+   either the dates need correcting toward the (defensible, server-timestamped) source
+   record, with `update_record`, or the work predates the declared uncertainty and the
+   framing needs an honest look. Do not confirm past it silently.
+4. Set `backfilled: true` on any entry whose `logged_at` is more than 7 days after its
+   `date` (spec §4.4). Harvested evidence confirmed late is still back-filled.
+5. If the confirmed entry evidences an EX, add its reference to that EX's
+   `evidence_records` (type, reference, date, description), so the EX cites it.
+6. Delete the stub from `sred/inbox/`. Emit `sred.evidence.logged` once per entry
+   appended, with `{ex_id, tu_id, source}`. Then `render_dashboard()`.
+
+`decisions` lets a user who has reviewed a batch confirm it in one go:
+`[{stub, link: EX-NN, description?}]`. Every stub in the batch is still shown before it is
+written; the batch saves typing, not judgment.
+
+### `reject_evidence(stub, reason)`
+
+The other answer to a proposal. Delete the stub and emit `sred.evidence.rejected` with
+`{stub, source, reason}`, so the proposal/confirmation ratio the quarterly review reports
+stays countable. A stub the user wants to keep thinking about stays in `sred/inbox/`
+untouched (a `triage:` block on the stub records the thinking, as the dogfood inbox does).
+
+### `rollup_costs(fy)`
+
+The reconciliation beneath the FY cost worksheet (spec §6.4). The worksheet is the
+human's document; this operation never writes a line in it.
+
+1. Find the worksheet `sred/cost-tracking/<FY>-costs.yaml`. If it does not exist, create it
+   from `templates/entities/FY-costs.yaml` with `fiscal_year` and `fy_end` filled in (from
+   `state/sred.json → fiscal_years.<FY>`) and the three category lists empty, and tell
+   the user the worksheet is theirs to fill.
+2. Collect every EX whose `claim_fy` is the FY (fall back to `fiscal_year` on records that
+   predate `claim_fy`, and say so). Sum `people_involved[].eligible_days` per person, with a
+   per-EX breakdown.
+3. Write ONLY the `rollup:` block: `generated_at`, `per_person: [{person,
+   eligible_days_total, by_experiment: {EX-NN: days}}]`, and `discrepancies:`. Leave
+   `eligible_experimental`, `partially_eligible_support` and `non_eligible_routine` as
+   they are, byte for byte.
+4. Discrepancies, one line each with the people and EX ids named:
+   - a person with eligible days on EXs who appears in no worksheet line;
+   - a person whose worksheet days (eligible plus partially eligible) exceed their
+     rolled-up days;
+   - an EX with zero eligible days whose id appears in a worksheet line's `linked_ex`;
+   - an EX in the FY with no `people_involved` at all.
+5. Report the totals and the discrepancies to the user. Do not resolve a discrepancy by
+   editing either side; each is a question for the person who owns the worksheet.
+6. Emit `sred.costs.rolled-up` with `{fy, people, eligible_days_total, discrepancies}`.
+
+Run it whenever the worksheet or an EX's `people_involved` changes during cost
+categorisation, and before `claim_status(fy, drafting)`.
+
+### `claim_status(fy, status)`
+
+Record a claim-status transition in `state/sred.json → fiscal_years.<FY>.claim_status`
+(under its advisory lock): `capturing → costing → drafting → in-review → advisor-handoff →
+filed | waived | forfeited`. Only the user moves a claim to `filed` or `waived`; the system
+never files. Moving to `drafting` with unresolved `rollup_costs` discrepancies is allowed
+but named. Emit `sred.claim.status-changed` with `{fy, from, to}`. A fiscal year not yet in
+`fiscal_years` (back-capturing a prior year) is added with its `fy_end`, derived from
+`capabilities.sred.fiscal_year_end`, at `capturing`; its deadlines are left for the
+automation layer to compute, as for every FY (spec §6.1).
 
 ### `gap_analysis()`
 
-Scan all TU/EX/ADV records and evidence log for completeness gaps:
+Run the validator first and build on what it finds; do not re-derive by hand what it already
+checks:
+
+```bash
+python3 capabilities/sred/validator/scripts/check.py <facility>/project-state --json
+```
+
+(In an installed plugin: `<plugin>/capabilities/sred/validator/scripts/check.py`.) It reads only.
+Every `fail` goes into the gap list as High, every `warn` at the severity of the matching row
+below (Medium where no row matches), each with its rule id and file. If Python or PyYAML is
+missing it exits 2 — say so in the report and fall back to the table below by reading.
+
+Then scan all TU/EX/ADV records and evidence log for the judgement gaps the script cannot see:
 
 | Check | Risk if failed |
 |-------|---------------|
@@ -269,7 +405,8 @@ Return a prioritized gap list with recommended actions and deadlines.
 
 Run `gap_analysis()` and produce a structured quarterly review report:
 1. SR&ED substrate summary: TU count, EX count, ADV count, evidence log entry count
-2. Completeness gaps (from gap_analysis)
+2. Completeness gaps (from gap_analysis), opening with the validator's counts (`N fail(s),
+   M warning(s)`) and every `fail` listed by rule id, file and entity
 3. Cost allocation status: are people's time entries current?
 4. 18-month deadline status: days remaining per fiscal year
 5. Milestones completed since last review — any experimental work uncaptured?
@@ -294,7 +431,9 @@ Used as input to the evidence-map template and T661 narrative generation.
 Fired via the `sred.evidence-capture` matrix entry on `milestone.completed`. Asks:
 - Does this milestone involve any experimental development? **Test against the criteria
   layers first** (`sred/criteria.yaml` candidate areas and declared-routine list, then the
-  pack's `innovation-criteria` company baseline): a milestone linked to a candidate area is
+  company Layer 1 — `sred/company-criteria.yaml`, else a forked pack's filled
+  `innovation-criteria` profile; a blank template means no company lens, so say so): a
+  milestone linked to a candidate area is
   presumed to need a TU; one squarely in declared-routine is presumed not to, and says so.
 - If yes: are TU/EX records current?
 - If no TU exists for this milestone: suggest creating one or confirming SR&ED non-applicability
@@ -354,8 +493,10 @@ section, never padded.
 
 Guided interview that authors or refreshes `sred/criteria.yaml` (Layer 2) — ideally with
 the SR&ED advisor in the room. Reads the Layer 0 baseline
-(`capabilities/sred/schema/eligibility-baseline.yaml`) and the company Layer 1 profile
-(pack `innovation-criteria.yaml`) first, then walks:
+(`capabilities/sred/schema/eligibility-baseline.yaml`) and the company Layer 1
+(`sred/company-criteria.yaml`, else a forked pack's filled `innovation-criteria.yaml`; a
+blank template means no company lens — say so, and offer `sred-onboarding`'s company
+chapter) first, then walks:
 
 1. **Frontier** — "Where in this project does the field's standard practice run out?" Name
    each candidate uncertainty area (id, label, field-relative description), link milestones.
@@ -368,6 +509,24 @@ Write the file from `templates/criteria.yaml`, `status: draft` until PL sign-off
 to `reviewed`. Emit `sred.criteria.updated` with areas added/removed — criteria drift is
 audit-relevant and must be visible in the activity log. The quarterly review nudges a
 refresh when `last_refreshed` ages past a quarter.
+
+### `render_dashboard()` — the declared report
+
+The SR&ED dashboard is a **declared report** (`capabilities/sred/surfaces.yaml → reports:`): the
+app's SR&ED page renders `reports/adhoc/sred-dashboard.html` in place, so it must be fresh
+whenever state changes. Run it after every operation above that writes a TU/EX/ADV, appends
+evidence, or moves a claim status — and at the end of the weekly and quarterly reviews:
+
+```bash
+node capabilities/sred/views/build-sred-dashboard.mjs <facility>/project-state
+```
+
+It reads the manifest block, `sred/criteria.yaml`, the three entity directories, the evidence
+log and `state/sred.json`; it writes ONE file and nothing else — a lens, never a writer. If Node
+is unavailable, say so in the run report instead of leaving a stale page: the app shows the
+last render's timestamp, and a stale timestamp is an honest signal. Before the first render (or
+when the capability is merely installed) the app shows `samples/dashboard.html`, a fixture
+render, banded "Template" — never mistake it for this project's data.
 
 ## Discipline rules
 

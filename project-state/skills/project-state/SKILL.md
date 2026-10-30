@@ -1,9 +1,25 @@
 ---
 name: project-state
-description: "The shared memory of a grant-funded project. Read, write, or validate project state — manifest, current phase, milestones, decisions, risks, changes, people, documents, activity log. Trigger on 'what's the project state', 'record a decision', 'log this change', 'update milestone M03', 'who is on the steering committee', 'what phase are we in', 'append to activity log', 'check state health', 'validate the manifest', or any request that reads or writes `project-state/`. Also trigger automatically whenever another project-* skill (phase-gate, document-curator, milestone-manager, status-reporter, notifier, sc-meeting, claim-prep, change-register, orchestrator) needs to read or write state — they route through this one. Also owns the capability lifecycle — enable, disable, and validate a capability plugin (sred, tender-intelligence) for this project: 'enable SR&ED', 'turn on the sred capability', 'is SR&ED enabled', 'disable the capability'. Works for any `project-state/` found by walking up from cwd."
+description: "Read or write the project's state — 'what's the project state', 'record a decision', 'log a risk', 'who is on the team', 'validate the manifest', 'enable SR&ED'. The memory layer every project-* skill writes through."
+metadata:
+  map:
+    tier: P0
+    stage: keep
+    requires: [memory]
+    binding: owner
+    reads: [manifest, state, log]
+    writes: [manifest, state, log]
+    delivers: [kanban]
+    role: memory-layer
 ---
 
 # Project State — the memory layer
+
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> The shared memory of a grant-funded project. Read, write, or validate project state — manifest, current phase, milestones, decisions, risks, changes, people, documents, activity log. Trigger on 'what's the project state', 'record a decision', 'log this change', 'update milestone M03', 'who is on the steering committee', 'what phase are we in', 'append to activity log', 'check state health', 'validate the manifest', or any request that reads or writes `project-state/`. Also trigger automatically whenever another project-* skill (phase-gate, document-curator, milestone-manager, status-reporter, notifier, sc-meeting, claim-prep, change-register, orchestrator) needs to read or write state — they route through this one. Also owns the capability lifecycle — enable, disable, and validate a capability plugin (sred, tender) for this project: 'enable SR&ED', 'turn on the sred capability', 'is SR&ED enabled', 'disable the capability'. Works for any `project-state/` found by walking up from cwd.
 
 ## Purpose
 
@@ -28,20 +44,68 @@ raise "No project-state/ found walking up from " + cwd
 
 `$PROJECT_STATE_DIR`, when set, short-circuits the walk (the appliance runner and prototype installs use this).
 
-## Substrate binding — one substrate, two transports
+## Substrate binding — one substrate, three transports
 
-Some skills (today: `project-harvester`; the pattern is available to any `*-state` facility) can persist either to the local filesystem or to a remote project-state.app substrate. This skill owns the resolver; adopting skills route through it. Spec: `docs/HARVEST-CONNECTIVITY-ROADMAP.md` §3.
+A project lives in exactly one home: files on a disk, or the cloud (MongoDB behind the **Project State**
+connector). This skill owns the resolver; every skill routes its reads and writes through it, so a skill
+written in terms of files works unchanged in either home. Spec: `docs/CLOUD-SUBSTRATE-SPEC.md` §6.4, §8;
+`docs/HARVEST-CONNECTIVITY-ROADMAP.md` §3 for the deposit binding.
 
-**Resolution (fail-safe toward local):**
+**Resolution (first match wins):**
 
-1. If `$PS_ENDPOINT` is set AND a personal `ksm_` token is available (`$PS_TOKEN`, else `~/.config/project-state/token`) → **deposit binding**: reads/writes go over HTTPS to that endpoint, authenticated with the token. Identity is the token's email — server-resolved, never claimed.
-2. Otherwise → **file binding**: root per "Finding `project-state/`" above. This is the default and the base case — a machine with no cloud config behaves exactly as documented in the rest of this file, and no skill may prompt the user about cloud setup.
+1. **mcp binding.** A project-state MCP's memory tools are available (`project_list`, `get_entity`,
+   `entity_put`, …) **and** it serves this project. There are two such servers, with the same tools:
+   - the **Project State connector** (cloud): `project_list` shows the project with `home: server`, the
+     user names it as `org/project`, or the local `manifest.yaml` has `home: kind: server`;
+   - the **local project-state MCP** (shipped in the plugin, over the folder on this machine):
+     `project_list` shows the project with `home: local` and a `folder`. Writes land in that folder,
+     checked against the kind registry exactly as the cloud checks them.
+
+   **So when those tools are available, call `project_list` before touching any file**, and if it lists
+   this project (`home: server` or `home: local` alike), reads and writes go through the server, as
+   mapped below. Never pass an actor: the cloud stamps the signed-in person, the local server
+   `$PROJECT_STATE_ACTOR` or `git config user.email`. If the local server refuses writes for want of an
+   actor, say so; do not fall back to writing files around it.
+2. **deposit binding.** `$PS_ENDPOINT` is set **and** a personal `ksm_` token is available (`$PS_TOKEN`,
+   else `~/.config/project-state/token`). The harvester's reads and writes go over HTTPS to that endpoint,
+   authenticated with the token. Identity is the token's email, resolved by the server, never claimed.
+3. **file binding.** Otherwise: the root per "Finding `project-state/`" above. This is the default and the
+   base case. A machine with no cloud config behaves exactly as documented in the rest of this file, and
+   no skill may prompt the user about cloud setup.
+
+**The mcp binding, operation by operation.** Skills describe their work in file terms: "write
+`decisions/<date>-<slug>.yaml`", "append `decision.recorded` to the activity log". Under the mcp binding
+each maps to one tool call. The path stays the same; the project is `org/project`.
+
+| A skill says | Under the mcp binding |
+|---|---|
+| read `<path>` | `get_entity {project, path}`. Keep the returned `sha256` if you may replace the file. |
+| list `<dir>/` (milestones, risks, …) | `list_entities {project, kind}`, or a `view_*` tool for a whole screen |
+| write a new file `<path>` | `entity_put {project, path, content}`, or `data` (+ `body` for Markdown) to have canonical YAML written |
+| replace an existing file | `entity_put {project, path, content, base_sha256}`: refused if it changed since you read it |
+| change a few fields | `entity_patch {project, path, set, unset, base_sha256}`: the rest of the file is kept byte for byte |
+| delete a file | `entity_delete {project, path, base_sha256, reason}`: logs and append-only records refuse |
+| append to `logs/activity.ndjson` | `log_append {project, event, summary, id}`: the server sets `ts` and `actor` |
+| append to another log (`sred/evidence-log.ndjson`, `tenders/events.ndjson`, a research `*.ndjson`) | `log_append {project, path, entry}`: `entry` is the line as the skill defines it; the server adds `appended_by` and `appended_at`. `entity_put` refuses every `.ndjson` |
+| take the advisory lock / stamp `last_modified*` | nothing: the server serialises writes and stamps them |
+| move a milestone, record a KPI reading, approve a draft, save a meeting or wiki page | the screen actions: `milestone_update`, `kpi_reading`, `queue_action`, `meeting_save`, `wiki_save`, … |
+| read `state.json` counters to allocate an id | read `state.json` with `get_entity`, then write the entity; the id check refuses a collision |
+
+The server checks every write against the kind registry (`packages/substrate-core`). It refuses an
+entity missing a required field, an `id` that disagrees with its file name, or an edit to an append-only
+record, and the refusal lists the reasons: fix and retry, never work around it. Warnings (a vocabulary
+value it doesn't know, a pre-existing gap) come back with the result; mention them if they matter.
+
+Scripts a skill runs over files (`scripts/*.py`) need a working copy and are not available under the mcp
+binding in claude.ai; skills that require them declare `requires: [python]` and are not offered there
+(the system map lists each skill's runtimes).
 
 **Rules (binding):**
 
-- A project has **one** canonical substrate. A given machine is either file-local or deposit-remote for a project — never both. The deposit binding handles an unreachable endpoint by keeping the batch and retrying, then stopping with a report; it never falls back to writing local files (that forks the substrate).
+- A project has **one** canonical substrate. For a given project a session is on exactly one binding: mcp, deposit or file. Never both. The deposit binding handles an unreachable endpoint by keeping the batch and retrying, then stopping with a report; it never falls back to writing local files (that forks the substrate).
 - The five harvest persist verbs and their mappings live in `project-harvester`'s "Substrate binding" section (`read-context`, `seen?`/`mark-seen`, `write-doc`, `advance-cursor`, `append-activity`). On the deposit binding, locking, dedup, cursor advance, and activity logging are enforced server-side by the deposit module — the same write protocol in this file, executed by the app.
 - Harvest cursors are file-per-entity at `harvest/cursors/{email}--{surface}.yaml` — one writer per file, no lock. The `state.json` advisory-lock protocol still applies to everything else.
+- **A project that moved to the cloud is read-only on disk.** If `manifest.yaml` has a top-level `home:` block with `kind: server` (written by `ps-move to-cloud`), the folder is a fenced copy: its files are read-only and **no skill writes to it**. Read from it if useful, but make every change in the cloud project it names (`home.org`/`home.project`) through the **Project State** connector: `entity_put` / `entity_patch` / `entity_delete` for files, `log_append` for events, the screen actions for the rest. If the connector is not available, stop and say where the project lives, never write locally. Spec: `docs/CLOUD-SUBSTRATE-SPEC.md` §8.2; decision `2026-09-26-cloud-move-download-publish`.
 
 ## Schema
 
@@ -77,6 +141,25 @@ Before every write, verify the document has all common frontmatter. Refuse to wr
 
 **Validate.** Walk every YAML/JSON in `project-state/`; confirm it parses **under a duplicate-key-strict loader** and has required frontmatter. Report deviations; do not auto-fix. Full check list under "Validate the state" below.
 
+### Who the actor is (every write)
+
+`created_by`, `last_modified_by`, the lock's `actor` and the activity line's `actor` all name **the
+person responsible for this write** — resolved once per session, in this order:
+
+1. **Deposit binding:** the token's email, server-resolved (see *Substrate binding*). Never claimed.
+2. **`$PROJECT_STATE_ACTOR`**, when set. Hosts set it: the kanban, scheduled routines, eval harnesses.
+3. **The signed-in person's email**, when the host tells you who you are talking to.
+4. **`git config user.email`** of the repository holding `project-state/` — skipping no-reply
+   addresses (`*@users.noreply.github.com`, `noreply@…`), which name an account, not a person.
+5. Otherwise **ask once**: "Whose name should go on these records?" — and reuse the answer.
+
+Never write a skill name (`project-state`), `TODO`, a placeholder, or the person the record is
+*about*. On-behalf entries keep the two apart: the operator who entered it is `created_by`; the person
+who decided or owns it goes in `decided_by` / `owner` (a `people/` id). Only a run **no person
+started** — a scheduled routine, a monitor — uses a machine actor, and it says so:
+`<skill> (automated)`, e.g. `project-orchestrator (fan-out: tick)`. (Found 2026-09-24: evals wrote
+`created_by: project-state` for a decision a person dictated.)
+
 ### Write operations (with locking + logging)
 
 For every write:
@@ -85,7 +168,7 @@ For every write:
 2. **Acquire lock.** Write `<target>.lock` = `{actor, acquired, ttl_seconds: 300}`.
 3. **Read current state** of the target if it exists.
 4. **Check staleness.** If the caller passed a `base_last_modified` and the current file's `last_modified` is newer, return a CONFLICT to the caller. Do not overwrite.
-5. **Apply the change.** Update `last_modified`, `last_modified_by`, fields under change. Preserve all other fields.
+5. **Apply the change.** Update `last_modified`, `last_modified_by` (the actor, above), fields under change. Preserve all other fields. A new entity gets `created` / `created_by` the same way.
 6. **Write the file.**
 7. **Release lock.** Delete `<target>.lock`.
 8. **Append to activity log.** One NDJSON line: `ts, actor, event, id, summary`. `summary` is
@@ -158,7 +241,15 @@ a memory-layer verb — it writes the manifest, so it routes through here like e
 Normative spec: `docs/CAPABILITY-PLUGINS.md` §5. Capabilities ship under `capabilities/<id>/` with a
 `plugin.yaml` declaring `namespace.prefix`, `payload.schema`, `payload.validator`, and
 `payload.packs.bundled`, plus a `templates/manifest-block.yaml` describing the config the block
-requires.
+requires. Four ship today: `sred`, `tender`, `intel` (whose 1.1 competitive layer adds claims, change events and projections inside the same namespace — `docs/INTEL-CI-SPEC.md`), `portfolio`. A capability the **app** can
+see, enable and board also ships `surfaces.yaml` (boards, setup stages, enablement defaults,
+and `reports:` — the HTML pages its skills render into the substrate, each with a `sample:`
+fixture render the app previews before enablement); `docs/CAPABILITY-PLUGINS.md` §7 is
+normative. The app's one-click Enable performs exactly the steps under "Enable" below. Its setup actions
+write config in the shape the declaration names: `manifest_add` appends to a list (feed URLs),
+`manifest_set` writes a scalar (`workspace_root`, `focus`, `fiscal_year_end`). Manifests written
+before `manifest_set` existed may hold a one-element list where the template says scalar — a
+collector should still accept that shape.
 
 ### Discover
 
@@ -357,6 +448,7 @@ Walk every YAML/JSON, parse, check frontmatter completeness. Report:
 - Stale lockfiles (older than TTL)
 - Phase manifests against the phase-manifest schema in `SCHEMA.md`
 - Lifecycle consistency — see below
+- The heavy-artifacts register — see below
 
 Return a summary; never auto-fix.
 
@@ -418,9 +510,31 @@ and stop.
 
 Spec: `docs/CONTINUOUS-LIFECYCLE-SPEC.md`.
 
+#### Heavy-artifacts register
+
+`manifest.yaml → caches` lists what the project's tools download that is large, and where each is
+cached. **Absent or `~` is valid and never reported**; `[]` means asked, nothing heavy. For each
+entry, with `<repo>` the folder holding `project-state/` (or the entry's `repo`, relative to it):
+
+- `artifact`, `tool`, `path` and `setting` are present — **error** if not.
+- `path` is relative and stays inside the repository: absolute, `~` or a `..` segment is an **error**.
+- `path` has no `node_modules` segment — **error**: a clean install deletes it, which is the defect the
+  register exists to prevent (FB-001).
+- `git -C <repo> check-ignore -q -- "<path>/"` exits 0. Exit 1 is an **error** (a cached binary must
+  never be committable). Exit 128, or `<repo>` not on this machine, is **info: not checked here**. Keep
+  the trailing slash: without it, a directory rule like `.cache/` does not match a cache folder that
+  has not been created yet.
+- `path` sits under `.cache/`, or the entry carries a `note` saying why not — **warning** otherwise.
+
+Offer a missing ignore rule as a one-line `.gitignore` addition, shown before it is written. Never
+change the tool's own setting; that is the code owner's change. Shape, the tool table and the CI cache
+step: `references/heavy-artifacts.md`.
+
 ## Reference files
 
 - `references/field-enums.yaml` — canonical enum values for `status`, `classification`, `kind`, etc.
 - `references/write-protocol.md` — detailed step-by-step write protocol with code-like pseudocode.
+- `references/heavy-artifacts.md` — the `caches` register: shape, the shared `.cache/` convention,
+  where common tools look, what validate checks, and the CI cache step.
 
 (These reference files are optional; if missing, the above instructions in SKILL.md are self-sufficient.)

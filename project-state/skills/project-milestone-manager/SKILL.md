@@ -1,15 +1,32 @@
 ---
 name: project-milestone-manager
-description: "CRUD project milestones, update percent complete and technical progress narrative, flag at-risk or blocked milestones, and regenerate the tracking xlsx from the YAML source of truth. Use this skill whenever the user says 'update M03', 'milestone status', 'how's M05 going', 'mark M01 complete', 'what milestones are at risk', 'recompute overall percent complete', 'list milestones', 'add a new deliverable to M07', 'assign owner to M12', 'regenerate the milestones tracker', or any request to read or write milestone state. Also trigger when project-status-reporter needs milestone data for a weekly report or SC pack, when project-funder-reporting needs % complete + technical_progress for the quarterly claim, when project-phase-gate checks whether gate milestones are done, or when project-change-register needs to know which milestones a change affects. PIC requires technical_progress + percent_complete per milestone on every claim — this skill owns that surface."
+description: "Create or update milestones — 'update M03', 'M02 is 60% done', 'mark M01 complete', 'what's at risk', 'the event moved'. Progress narratives accumulate; re-anchors seeded plans when dates slip."
+metadata:
+  map:
+    tier: P1
+    stage: keep
+    requires: [memory]
+    binding: mcp-ready
+    reads: [milestones]
+    writes: [milestones, reports, log]
 ---
 
 # Project Milestone Manager
 
+> **When to use — full trigger description.** The frontmatter carries a short, trigger-first
+> description so all of the suite's skills fit Claude Code's skill-listing budget (see
+> docs/SKILL-SPEC.md, *Description budget*). The complete version, kept here:
+>
+> CRUD project milestones, update percent complete and technical progress narrative, flag at-risk or blocked milestones, and regenerate the tracking xlsx from the YAML source of truth. Use this skill whenever the user says 'update M03', 'milestone status', 'how's M05 going', 'mark M01 complete', 'what milestones are at risk', 'recompute overall percent complete', 'list milestones', 'add a new deliverable to M07', 'assign owner to M12', 'regenerate the milestones tracker', 'the event moved', 'the launch slipped', or any request to read or write milestone state. Also trigger when project-status-reporter needs milestone data for a weekly report or SC pack, when project-funder-reporting needs % complete + technical_progress for the quarterly claim, when project-phase-gate checks whether gate milestones are done, or when project-change-register needs to know which milestones a change affects. PIC requires technical_progress + percent_complete per milestone on every claim — this skill owns that surface.
+
 ## Purpose
 
-Milestones are the spine of a PIC-funded project. The Master Project Agreement's Schedule A lists them; quarterly claims report progress against them; Steering Committee meetings review them; final reports close them out. This skill is the single interface for everything milestone-related.
+Milestones are the spine of every project — a campaign's launch beats, an event's countdown, a
+release plan, a grant's Schedule A. Status reports, review meetings and (on a funded project) claims
+all report against them. This skill is the single interface for everything milestone-related.
 
-Per PIC PM Guide, the two fields that *must* be reported on every milestone every quarter are:
+On a PIC-funded project the Master Project Agreement's Schedule A lists them, quarterly claims report
+progress against them and Steering Committee meetings review them. Per PIC PM Guide, the two fields that *must* be reported on every milestone every quarter are:
 - `percent_complete` — integer 0–100
 - `technical_progress` — narrative string describing what was accomplished
 
@@ -26,13 +43,28 @@ Every other field (planned/actual dates, deliverables, owner, budget category, s
 7. "add a deliverable to M04"
 8. "recompute overall percent complete" / "project health"
 9. "regenerate the milestones tracker" / "rebuild tracking/milestones.xlsx"
-10. Any `project-*` skill fetching milestone data
+10. "the event moved to 9 April" / "the launch slipped two weeks" / "push the plan back" → `reanchor()`
+11. Any `project-*` skill fetching milestone data
 
 ## Operations
 
+**Which home.** If a project-state MCP is connected (the Project State connector, or the local one the
+plugin ships; its tools include `project_list`, `get_entity` and `entity_patch`), call `project_list` first. If it
+lists this project, with `home: server` or `home: local` alike (the local server writes the folder for you;
+`local` is not a cue to edit files), every read and write goes through those tools, the activity-log entry included: after
+an `entity_put` / `entity_patch` / `entity_delete`, append the skill's event with `log_append` (the screen
+actions, such as `milestone_update`, log their own). Work on the files directly only when no MCP serves the
+project.
+
+Every read and write goes through the memory layer (`project-state`), which names entities by **kind
+and id**, never by path: a milestone is kind `milestone` with an id like `M03-matrix-editor`. On disk,
+`project-state`'s kinds reference says where each kind lives; over the Project State connector, pass the
+kind and id (or use `milestone_update` for status and percent complete) and the server places it. The
+same steps work in both homes.
+
 ### `list_milestones(filter?)`
 
-Read every file under `milestones/`. Return an array sorted by id. Optional filters:
+Read every milestone entity (kind `milestone`; over the connector, `list_entities` or `view_board`). Return an array sorted by id. Optional filters:
 - `status: planned | in_progress | at_risk | complete | blocked` — `blocked` renders in the **At Risk** column in the kanban
 - `owner_short: "OrgA" | "OrgB"`
 - `proposal_phase: "Phase 1 – ..."` (loose match)
@@ -63,11 +95,18 @@ The most-used operation. Common field updates:
 
 | User says                              | Fields updated                                          |
 | -------------------------------------- | ------------------------------------------------------- |
-| "M03 is 40% done, pilot batches 5-10 complete" | `percent_complete: 40`, `technical_progress: "Pilot batches 5-10 complete. Batches 1-4 pending rework on sensor calibration."` (always append date context if missing) |
+| "M03 is 40% done, pilot batches 5-10 complete" | `percent_complete: 40`, and **append** to `technical_progress`: `"2026-09-07: Pilot batches 5-10 complete; batches 1-4 pending rework on sensor calibration."` |
 | "M05 is at risk — waiting on M04 data" | `status: at_risk`, `at_risk_reason: "Blocked on M04 labeled dataset completeness."` |
 | "M01 is done"                          | `status: complete`, `percent_complete: 100`, `actual_end: <today>` |
 | "M07 started today"                    | `status: in_progress`, `actual_start: <today>`          |
 | "Jane from OrgB now owns M11"          | `owner_person: <slug-of-person-record>` (create people entry if missing via project-state) |
+
+**`technical_progress` accumulates — never overwrite it.** It is the milestone's running narrative;
+funder claims, SC packs and status reports quote it, and a claim period needs to see what was already
+reported. Keep every existing line and add the new progress as a dated line (`YYYY-MM-DD: …`) at the
+end. Restate nothing that is already there, and never condense earlier entries into a summary. To
+correct an earlier line, add a dated correction rather than editing it — the same rule as the
+activity log.
 
 All writes go through `project-state` for locking + logging. Event names:
 - `milestone.created`
@@ -93,7 +132,7 @@ Return:
 - Count by proposal phase
 - "On-track?" — green if all `in_progress` milestones are on or ahead of schedule; yellow if any behind; red if any blocked
 
-Store the result under `state.json:health` via `project-state`, which logs `health.assessed`.
+Store the result as the `health` field of the state record (kind `state`) via `project-state`, which logs `health.assessed`.
 
 #### `overall_percent` is all-time, and now says so
 
@@ -110,7 +149,7 @@ Two changes, both additive:
   exact meaning — the existing consumers of the rollup read the same field and get the same value.
   What changes is that the field now states what it measures. This is disclosure, not a fix, and spec
   §5.3 says so plainly.
-- **When `state.json:lifecycle` is `continuous`, also write `health.increment`,** scoped to
+- **When the state record's `lifecycle` is `continuous`, also write `health.increment`,** scoped to
   `current_increment`: `{id, percent, milestones_total, by_status}`. Membership is
   `milestone.increment == current_increment`, else the increment manifest's `milestones` list. This is
   the number that answers *are we done with what we are doing now.*
@@ -152,6 +191,31 @@ Use the `xlsx` skill for the heavy lifting; do not write xlsx from scratch. The 
 
 Event logged: `tracking.regenerated` with `target: "milestones.xlsx"`.
 
+### `reanchor()`
+
+When a date the plan hangs off moves — `phases.anchor_date` (event day, launch day),
+`project.start_date` or `project.end_date` — first write the new date to the manifest through
+`project-state`, then move the milestones that were seeded from it:
+
+```bash
+python3 <project-scaffolder>/scripts/seed_pack.py reanchor --state project-state --dry-run
+python3 <project-scaffolder>/scripts/seed_pack.py reanchor --state project-state --actor <operator email>
+```
+
+This runs a script over a working copy, so it is available where the project's files are (the file binding,
+or the server runner); over the connector in claude.ai, list the milestones that would move and change them
+one by one with `milestone_update` / `entity_patch` instead. Show the dry run and get a yes before the real run. It moves only milestones that carry `seed_due`
+(adopted from a pack seed) **and** whose `planned_end` still equals what that expression gave against
+the dates recorded in `seed_basis`. A milestone someone re-dated by hand, a completed one, and any
+milestone that was never seeded are left exactly as they are and listed as *kept*, so the operator can
+decide about those one by one. Edits are line-level — comments and field order survive. Each move logs
+`milestone.updated`; the run logs `milestones.reanchored`.
+
+Anchored reporting deadlines (a run-of-show brief at `anchor-7d`) need nothing: the kanban scheduler
+recomputes them from the current anchor on every tick.
+
+A move of three months or more is still a material change — hand it to `project-change-register`.
+
 ## Discipline rules
 
 - **Never silently accept a 0%→100% jump without a completion event.** If `percent_complete` is set to 100, `status` must become `complete` and `actual_end` must be set.
@@ -174,7 +238,7 @@ Event logged: `tracking.regenerated` with `target: "milestones.xlsx"`.
 **User:** "Mark M01 as 60% complete — we got the first year of historical data loaded and the baseline cycle time and yield validated. Still waiting on the two energy-consumption datasets."
 
 **Skill:**
-1. Read `milestones/M01-cdi-data-readiness.yaml`.
+1. Read the milestone `M01-cdi-data-readiness`.
 2. Update:
    - `percent_complete: 60`
    - `technical_progress: "Year 1 historical data loaded and integrated. Baseline cycle time and yield KPIs validated and approved. Remaining: Year 2/Year 3 energy consumption datasets expected by 2026-04-25."`

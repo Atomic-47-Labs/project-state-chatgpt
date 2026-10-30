@@ -8,16 +8,31 @@ events:
     emitted: "TU recorded"
   - id: "sred.tu.resolved"
     emitted: "TU resolved"
+  - id: "sred.tu.updated"
+    emitted: "TU revised or corrected by update_record (revision kept on the record)"
+    payload: [id, fields, reason]
   - id: "sred.ex.created"
     emitted: "EX recorded"
   - id: "sred.ex.completed"
     emitted: "EX completed"
+  - id: "sred.ex.updated"
+    emitted: "EX revised or corrected by update_record"
+    payload: [id, fields, reason]
   - id: "sred.adv.created"
     emitted: "ADV recorded"
+  - id: "sred.adv.updated"
+    emitted: "ADV revised or corrected by update_record"
+    payload: [id, fields, reason]
   - id: "sred.evidence.logged"
     emitted: "evidence entry appended"
   - id: "sred.evidence.proposed"
     emitted: "harvester drops a candidate into sred/inbox/"
+  - id: "sred.evidence.rejected"
+    emitted: "a sred/inbox/ proposal declined by reject_evidence and its stub removed"
+    payload: [stub, source, reason]
+  - id: "sred.costs.rolled-up"
+    emitted: "rollup_costs recomputed the FY worksheet's rollup block"
+    payload: [fy, people, eligible_days_total, discrepancies]
   - id: "sred.review.completed"
     emitted: "reviewer verdict produced"
     payload: [verdict, fy]

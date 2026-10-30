@@ -1,6 +1,6 @@
 # tender-pursuit pack
 
-Profiles for facilities running the tender-intelligence package.
+Profiles for facilities running the tender package.
 
 Provides: `notifier` (score bands + ten immediate-alert rules, spec §17),
 `review-meeting` (weekly 30-minute Tender Pipeline Review), and
@@ -16,7 +16,7 @@ Activate in `manifest.yaml`:
 
 ```yaml
 packages:
-  tender-intelligence:
+  tender:
     enabled: true
     pack: tender-pursuit
 ```

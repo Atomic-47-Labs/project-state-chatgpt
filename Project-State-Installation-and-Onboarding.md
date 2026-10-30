@@ -1,7 +1,9 @@
-# Project State 4.9.0
+# Project State 5.7.4
 ## Installation and first-project guide
 
-For recipients of `project-state-4.9.0.zip` • Prepared 11 September 2026
+For recipients of `project-state-5.7.4.zip` • Prepared 30 October 2026
+
+**Upgrading from 4.9?** Your project folder needs no migration. Read `UPGRADE-4.9-to-5.7.4.md`, then reinstall with sections 2–4 and skip onboarding.
 
 Project State helps an AI assistant maintain project records, milestones, decisions, risks, documents, and reports in a folder on your computer. Installing the plugin makes its workflows available. Onboarding then creates the records for your particular project. These are two separate steps.
 
@@ -14,6 +16,8 @@ ChatGPT Work with local file access and Plugin Creator may also support the loca
 Have these ready:
 
 - The supplied ZIP.
+- **Node 20.10 or later** (`node --version`). Without it everything still works, but the plugin's local server cannot start, so writes are not checked by it (see section 4a).
+- The email address your records should be signed with.
 - A project name and one sentence describing its purpose.
 - The project lead and any known start/end dates.
 - Any existing proposal, scope of work, milestone schedule, or reporting example. Documents are optional; unknown information can remain marked as missing.
@@ -22,7 +26,7 @@ You do not need Slack, Google Drive, Jira, GitHub, or a separate dashboard for t
 
 ## 2. Extract and open the plugin
 
-1. Download and extract `project-state-4.9.0.zip` using your computer’s usual ZIP utility.
+1. Download and extract `project-state-5.7.4.zip` using your computer’s usual ZIP utility.
 2. Move the extracted `project-state` folder to a stable location, such as **Documents → Codex Plugins → project-state**. Keep it there after installation.
 3. Confirm it contains `skills`, `packs`, and `templates`. It also contains a hidden `.codex-plugin` folder with `plugin.json`; Codex can check that for you.
 4. In Codex, open or add the extracted `project-state` folder as a local project and start a task there. If the app asks for a folder, select the folder itself, not the ZIP.
@@ -34,7 +38,7 @@ You do not need Slack, Google Drive, Jira, GitHub, or a separate dashboard for t
 Paste this entire prompt into that task:
 
 ```text
-Install this existing Project State 4.9.0 plugin for my local Codex account.
+Install this existing Project State 5.7.4 plugin for my local Codex account.
 
 Use the built-in plugin-creator skill and its supported helpers. First verify
 that the current folder contains .codex-plugin/plugin.json with name
@@ -57,7 +61,7 @@ accounts, create a GitHub repository, or publish anything.
 
 Allow the file access needed to install it if your app requests it. Let Codex finish and report the result. The standard installation command, **after registration**, is `codex plugin add project-state@personal` when the validated marketplace name is `personal`. If your marketplace has a different name, Codex must use that name.
 
-**Expected result:** Codex reports successful installation and the 4.9.0 base version. A local cache suffix may follow the version. If it only reports “files copied” or “marketplace created,” ask it to complete installation and verify the installed entry.
+**Expected result:** Codex reports successful installation and the 5.7.4 base version. A local cache suffix may follow the version. If it only reports “files copied” or “marketplace created,” ask it to complete installation and verify the installed entry.
 
 The upstream `project-state/README.md` contains **Claude Code** installation commands. Use this guide for Codex; do not run those `/plugin` instructions here.
 
@@ -76,6 +80,18 @@ Do not create or change project files yet.
 **Pass:** the assistant confirms those installed skills are available. A description of what Project State could do, without confirming actual availability, is not a completed check.
 
 If skills are missing, refresh or restart Codex and try another new task. If still missing, use the troubleshooting table below.
+
+## 4a. Sign your records
+
+Every record names the person responsible by email. Set it once, in a terminal:
+
+```bash
+git config --global user.email you@example.com
+```
+
+Or set `PROJECT_STATE_ACTOR` to your email in the environment Codex starts from. Without either, the plugin's local server answers questions but refuses to write ("writes need a signed-in person to attribute them to"). It never signs records with your computer's login name. A GitHub no-reply address doesn't count.
+
+To check, start a new task in your project folder and ask: "Use project-state's project_list and tell me who writes are signed as." If the server is not running (no Node), the assistant writes the files itself and asks once whose name to put on them.
 
 ## 5. Create your first project folder
 
@@ -126,16 +142,21 @@ Onboarding collects the following information. You can supply documents instead 
 
 Packs supply defaults for different project relationships. Select only those that match your work; multiple packs can apply.
 
+Packs come on two axes. Pick one **work** pack (what the project makes happen) and any **accountability** packs (who hears how it's going). Onboarding recommends them from your answers.
+
 | Your situation | Pack to discuss |
 |---|---|
+| General project, nothing more specific fits | `work-general` |
+| Sprint-based software product | `agile-default` |
+| Campaign, event, recurring operations cycle | `work-campaign`, `work-event`, `work-ops-cycle` |
+| Sales pursuit, research, partnership, organisational change, content | `work-sales-pursuit`, `work-research`, `work-partnership`, `work-org-change`, `work-content` |
+| Reports to an internal sponsor (the default) | `sponsor-internal` |
 | Work for a paying client | `client-services` |
-| Sprint-based product or delivery work | `agile-default` |
 | Board or investor reporting | `board-investor` |
-| Open-source community project | `open-source-community` |
 | Protein Industries Canada / PCAIS project | `pic-pcais` |
-| Canadian grant application | `grant-canada`; ask whether separate grant onboarding is appropriate |
+| Canadian grant | `grant-canada`; ask whether separate grant onboarding is appropriate |
 
-SR&ED and tender pursuit have dedicated capability workflows. Ask for those separately if relevant; they are not prerequisites for a first project.
+SR&ED, tender pursuit, competitive intel, portfolio and research are **capabilities** with their own onboarding (`sred-onboarding`, `intel-onboarding`, `portfolio-onboarding`, `research-onboarding`). Ask for those separately if relevant; they are not prerequisites for a first project, and their packs are not chosen as project packs.
 
 ### Review and initialize
 
@@ -194,16 +215,19 @@ Connect external services only when you need them, using your own accounts. A re
 | `project-state/` already exists | Request validation or re-orientation of the existing project. Do not start a fresh scaffold over it. |
 | Report contains unsupported details | Ask it to identify the source, correct the underlying record, and regenerate the report. |
 | External service unavailable | Continue local work; connect that service separately when needed. |
+| "writes need a signed-in person to attribute them to" | Set your email (section 4a), then start a new task. |
+| The `project-state` MCP server does not start | Check `node --version` is 20.10 or later and on your `PATH`. Until it is, the skills write the files directly; ask for validation after each session. |
+| The assistant offers to "migrate" a 4.9 project | Decline. 5.7.4 reads a 4.9 folder as it is; see `UPGRADE-4.9-to-5.7.4.md`. |
 
 ## Updates and backups
 
-This ZIP is a snapshot of version 4.9.0; it does not establish automatic updates. Keep the installed source folder. For a future supplied version, ask Plugin Creator to update that source and reinstall from the existing marketplace using its supported update workflow, then verify in a new task.
+This ZIP is a snapshot of version 5.7.4; it does not establish automatic updates. Keep the installed source folder. For a future supplied version, ask Plugin Creator to update that source and reinstall from the existing marketplace using its supported update workflow, then verify in a new task.
 
 Back up your **project folder**, including `project-state/` and source documents, using your normal backup system. Sending someone the plugin does not give them your project records, account connections, or access to your project.
 
 ## Verification scope and references
 
-This guide was checked against the supplied plugin's manifest, onboarding/scaffolder/goal-tracker instructions, the installed Plugin Creator instructions, and local `codex plugin` command help. It has not been tested on the recipient's account or computer. Some bundled skills retain Claude-specific and separate-dashboard references; installation does not establish compatibility of every optional workflow.
+This guide was checked against the supplied plugin's manifest, onboarding/scaffolder/goal-tracker instructions, the installed Plugin Creator instructions, and local `codex plugin` command help. The bundle installs in a clean Codex home (`codex plugin add`), every skill passes Codex's skill validator, and the bundled server was run against a 4.9 project folder. It has not been tested on the recipient's account or computer. Some bundled skills retain Claude-specific and separate-dashboard references (see the README's "What cannot be carried over"); installation does not establish compatibility of every optional workflow.
 
 - [OpenAI: Build plugins — local marketplace installation and new-conversation testing](https://learn.chatgpt.com/docs/build-plugins)
 - Bundle: `.codex-plugin/plugin.json`, `skills/project-onboarding/SKILL.md`, `skills/project-scaffolder/SKILL.md`, and `skills/project-goal-tracker/SKILL.md`

@@ -5,27 +5,36 @@
 # │ company records and investigates. See capability schema/eligibility-         │
 # │ baseline.yaml (Layer 0, not editable) for the invariant test.               │
 # └──────────────────────────────────────────────────────────────────────────────┘
-# Single-company deployments fill this in place. Multi-company: fork the pack
-# (sred-canada → sred-<co>) so each company carries its own criteria profile —
-# packs are the portable org-level unit (CAPABILITY-PLUGINS.md §2).
+# THIS FILE SHIPS BLANK. It is the template for the claimant's own Layer 1, not a
+# company's filled-in lens. Do not edit it in place: the plugin overwrites it on every
+# update, and every project on the install would share whatever you wrote.
+#
+# Where the company's values live (resolution order — first one found wins):
+#   1. sred/company-criteria.yaml in the project's substrate. sred-onboarding Chapter 4
+#      copies this template there and fills company, fields_of_science and
+#      technology_baseline from the claimant interview.
+#   2. A forked pack (sred-canada → sred-<co>) whose copy of this profile is filled in —
+#      for an org that runs many projects under one claimant and wants the lens shared.
+#   3. This file. Still holding "<...>" placeholders means NO company lens is declared:
+#      the tracker and reviewer work from Layer 0 and the project's Layer 2 alone, and
+#      say so, rather than critiquing against an empty baseline.
 profile_id: "sred-canada.innovation-criteria"
 layer: 1
 
-company: "Atomic 47 Labs"
+company: "<legal name of the claimant — the entity filing the T661>"
 
 fields_of_science:
-  # CRA codes this company claims under
-  - code: "2.02.09"
-    label: "Software engineering"
+  # CRA field-of-science codes this company claims under. 2.02.09 (software engineering)
+  # covers most software work; take the claimant's own codes, never assume.
+  - code: "<e.g. 2.02.09>"
+    label: "<e.g. Software engineering>"
 
 technology_baseline:
   # Established practice FOR THIS COMPANY'S DOMAINS — work built entirely on these
   # is presumed routine unless a project's Layer 2 declares a specific frontier.
-  - "Standard web application development (Next.js/React CRUD, REST APIs)"
-  - "Conventional CI/CD, git workflows, and release engineering"
-  - "Routine use of vendor LLM APIs (prompt engineering against documented behavior)"
-  - "Standard connector/API integration (Slack, Gmail, Jira, calendar) per vendor docs"
-  - "Static site generation, template rendering, document formatting"
+  # Write each as a practice the field already knows, e.g. "Standard REST API
+  # integration per vendor docs" — not as something the company finds easy.
+  - "<established practice in the company's domain>"
 
 exemplars:
   # Positive/negative examples from past claims — the reviewer critiques new TUs
@@ -38,7 +47,7 @@ house_language:
   additional_risky_patterns:
     - "we integrated"
     - "we adopted"
-    - "our team had never"       # company-relative framing — reframe field-relative
+    - "our team had never"      # company-relative framing — reframe field-relative
     - "we didn't have a way to"  # company-relative framing — reframe field-relative
 
 advisor_guidance: |
