@@ -14,7 +14,7 @@ prompts). It is generated from the Claude Code plugin by
 [`scripts/build-from-plugin.py`](./scripts/build-from-plugin.py); the skills,
 packs, capabilities and templates are the same files.
 
-Version **5.7.4** · MIT licensed · maintained by Worksona (David Olsson,
+Version **5.7.4** · proprietary, all rights reserved · maintained by Worksona (David Olsson,
 <david@atomic47.co>) for [Atomic 47 Labs](https://atomic47.co).
 
 **Upgrading from 4.9?** Read [UPGRADE-4.9-to-5.7.4.md](./UPGRADE-4.9-to-5.7.4.md).
@@ -175,4 +175,7 @@ build fails if any of them survive.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+Proprietary. Copyright Atomic 47 Labs Inc., all rights reserved. This
+repository is public so authorised users can install from it; that grants no
+licence. Use needs a written agreement with Atomic 47 Labs Inc. See
+[LICENSE](./LICENSE).

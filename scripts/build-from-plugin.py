@@ -9,6 +9,8 @@ The Claude plugin is the source; this script only translates it. What it changes
   * .claude-plugin/plugin.json -> .codex-plugin/plugin.json (Codex manifest + marketplace interface).
   * .mcp.json: the same local project-state server, started with ${PLUGIN_ROOT} instead of
     ${CLAUDE_PLUGIN_ROOT}. Codex starts it; hosted ChatGPT cannot, and the skills fall back to files.
+  * LICENSE: the repo's proprietary LICENSE replaces the plugin's MIT one, in the file and the
+    manifest; the bundle README's licence line points at it.
   * SKILL.md frontmatter: Codex accepts only name, description, license, allowed-tools and metadata,
     with no angle brackets in the description. Every other top-level key (map, tier, plugin,
     depends_on, slash_command, surfaces) moves, unchanged, under `metadata:`.
@@ -64,7 +66,7 @@ def manifest(src: dict) -> dict:
         "author": {"name": "Worksona", "email": "david@atomic47.co", "url": "https://atomic47.co"},
         "homepage": "https://github.com/Atomic-47-Labs/project-state-chatgpt",
         "repository": "https://github.com/Atomic-47-Labs/project-state-chatgpt",
-        "license": src.get("license", "MIT"),
+        "license": "LicenseRef-Proprietary",
         "keywords": src.get("keywords", []) + ["intel", "portfolio", "research"],
         "skills": "./skills/",
         "mcpServers": "./.mcp.json",
@@ -151,6 +153,12 @@ def main():
             new = f"---\n{codex_frontmatter(fm)}\n---\n{body}"
         if new != text:
             f.write_text(new, encoding="utf-8")
+
+    shutil.copyfile(ROOT / "LICENSE", OUT / "LICENSE")
+    readme = OUT / "README.md"
+    readme.write_text(readme.read_text().replace(
+        "MIT — see [LICENSE](./LICENSE).",
+        "Proprietary: Copyright Atomic 47 Labs Inc., all rights reserved. See [LICENSE](./LICENSE)."))
 
     (OUT / ".codex-plugin").mkdir()
     (OUT / ".codex-plugin" / "plugin.json").write_text(json.dumps(manifest(src_manifest), indent=2) + "\n")

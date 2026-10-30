@@ -68,4 +68,4 @@ draft for human review.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+Proprietary: Copyright Atomic 47 Labs Inc., all rights reserved. See [LICENSE](./LICENSE).
