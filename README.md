@@ -25,12 +25,14 @@ Your `project-state/` folder needs no migration.
 | Path | What it is |
 |------|------------|
 | [`project-state/`](./project-state) | The plugin bundle, uncompressed. Point Codex at this folder. |
-| [`dist/project-state-5.7.4.zip`](./dist/project-state-5.7.4.zip) | The same bundle as a single archive, for sending to someone who is not cloning the repo. |
-| [`dist/project-state-5.7.4.zip.sha256`](./dist/project-state-5.7.4.zip.sha256) | Checksum for that archive. |
+| [`dist/project-state-5.7.4-chatgpt.zip`](./dist/project-state-5.7.4-chatgpt.zip) | **ChatGPT: download this one.** The bundle with no MCP server declared, so ChatGPT asks for no connector and the skills work on your `project-state/` files directly. |
+| [`dist/project-state-5.7.4.zip`](./dist/project-state-5.7.4.zip) | **Codex:** the whole bundle, including the local server that checks and signs every write (needs Node 20.10+). |
+| `dist/*.sha256` | Checksums for both. |
 | [`Project-State-Installation-and-Onboarding.md`](./Project-State-Installation-and-Onboarding.md) | Installation, onboarding, verification and troubleshooting. Start here. |
 | [`UPGRADE-4.9-to-5.7.4.md`](./UPGRADE-4.9-to-5.7.4.md) | What changes for a 4.9 user, and what does not. |
 | [`scripts/build-from-plugin.py`](./scripts/build-from-plugin.py) | Regenerates `project-state/` from a Claude Code plugin release. |
-| [`scripts/verify-bundle.sh`](./scripts/verify-bundle.sh) | Confirms the uncompressed tree is byte-identical to the archive. |
+| [`scripts/package.sh`](./scripts/package.sh) | Builds both zips from `project-state/`. |
+| [`scripts/verify-bundle.sh`](./scripts/verify-bundle.sh) | Confirms the Codex zip is byte-identical to `project-state/`, and the ChatGPT zip is the same less the server. |
 
 ```bash
 ./scripts/verify-bundle.sh
@@ -86,8 +88,9 @@ need a signed-in person to attribute them to". Set one of them once:
 git config --global user.email you@example.com
 ```
 
-**2. Directly on the files (hosted ChatGPT, or no Node).** A ChatGPT chat
-cannot start a local server, and Codex cannot start this one without Node.
+**2. Directly on the files (ChatGPT, or Codex without Node).** ChatGPT
+cannot start a local server; given one, it asks for a connector instead. So
+the ChatGPT zip declares none. Codex cannot start this one without Node.
 The skills then write the files themselves, following the same rules the
 server enforces, as every version before 5.0 did:
 
@@ -162,9 +165,7 @@ documents, with your normal backup system.
 ```bash
 git -C <project-state source repo> archive v5.7.4 plugin | tar -x -C /tmp/ps-src
 python3 scripts/build-from-plugin.py /tmp/ps-src/plugin --scrub <scrub.json>
-rm -f dist/*.zip dist/*.sha256
-zip -qrX dist/project-state-5.7.4.zip project-state
-(cd dist && shasum -a 256 project-state-5.7.4.zip > project-state-5.7.4.zip.sha256)
+./scripts/package.sh
 ./scripts/verify-bundle.sh
 ```
 

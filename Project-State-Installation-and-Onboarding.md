@@ -1,7 +1,7 @@
 # Project State 5.7.4
 ## Installation and first-project guide
 
-For recipients of `project-state-5.7.4.zip` • Prepared 30 October 2026
+For recipients of `project-state-5.7.4-chatgpt.zip` (ChatGPT) or `project-state-5.7.4.zip` (Codex) • Prepared 30 October 2026
 
 **Upgrading from 4.9?** Your project folder needs no migration. Read `UPGRADE-4.9-to-5.7.4.md`, then reinstall with sections 2–4 and skip onboarding.
 
@@ -26,7 +26,7 @@ You do not need Slack, Google Drive, Jira, GitHub, or a separate dashboard for t
 
 ## 2. Extract and open the plugin
 
-1. Download and extract `project-state-5.7.4.zip` using your computer’s usual ZIP utility.
+1. Download and extract the zip using your computer’s usual ZIP utility. In ChatGPT, use `project-state-5.7.4-chatgpt.zip`: it asks for no connector. In Codex with Node 20.10+, `project-state-5.7.4.zip` adds the local server that checks every write.
 2. Move the extracted `project-state` folder to a stable location, such as **Documents → Codex Plugins → project-state**. Keep it there after installation.
 3. Confirm it contains `skills`, `packs`, and `templates`. It also contains a hidden `.codex-plugin` folder with `plugin.json`; Codex can check that for you.
 4. In Codex, open or add the extracted `project-state` folder as a local project and start a task there. If the app asks for a folder, select the folder itself, not the ZIP.
@@ -83,7 +83,11 @@ If skills are missing, refresh or restart Codex and try another new task. If sti
 
 ## 4a. Sign your records
 
-Every record names the person responsible by email. Set it once, in a terminal:
+Every record names the person responsible by email.
+
+**ChatGPT zip:** there is no server. The assistant writes the files itself and asks once whose name to put on them. Answer with your email address, not your name.
+
+**Codex zip:** set it once, in a terminal:
 
 ```bash
 git config --global user.email you@example.com
